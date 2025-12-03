@@ -2,7 +2,7 @@ from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
-from launch.substitutions import PathJoinSubstitution
+from launch.substitutions import Command, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -41,7 +41,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'use_sim_time': True,
-            'robot_description': urdf_file
+            'robot_description': Command(['cat ', urdf_file])
         }]
     )
 
