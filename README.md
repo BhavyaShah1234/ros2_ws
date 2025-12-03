@@ -1,2 +1,2 @@
 # ros2_ws
-Collection of ROS 2 packages for Gazebo worlds, robotic arms and autonomous cars.
+Collection of packages of ROS packages for Gazebo worlds, robotic arms and autonomous cars.
