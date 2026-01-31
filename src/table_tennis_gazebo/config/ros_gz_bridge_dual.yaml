@@ -53,3 +53,51 @@
   gz_type_name: "gz.msgs.CameraInfo"
   direction: GZ_TO_ROS
   lazy: true
+
+# Overhead camera RGB
+- ros_topic_name: "overhead_cam/image"
+  gz_topic_name: "overhead_cam/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+  lazy: true
+
+# Overhead camera depth
+- ros_topic_name: "overhead_cam/depth_image"
+  gz_topic_name: "overhead_cam/depth_image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+  lazy: true
+
+# Overhead camera info
+- ros_topic_name: "overhead_cam/camera_info"
+  gz_topic_name: "overhead_cam/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+  lazy: true
+
+# Side camera RGB
+- ros_topic_name: "side_cam/image"
+  gz_topic_name: "side_cam/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+  lazy: true
+
+# Side camera depth
+- ros_topic_name: "side_cam/depth_image"
+  gz_topic_name: "side_cam/depth_image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+  lazy: true
+
+# Side camera info
+- ros_topic_name: "side_cam/camera_info"
+  gz_topic_name: "side_cam/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+  lazy: true

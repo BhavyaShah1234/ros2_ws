@@ -162,8 +162,25 @@ def generate_launch_description():
     )
     
     delayed_spawn_green = TimerAction(
+    delayed_spawn_green = TimerAction(
         period=5.5,
         actions=[spawn_green]
+    )
+    
+    # Static transforms to create separate world frames for each robot
+    # This creates red/world and green/world frames linked to the main world
+    static_tf_red = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_red_world',
+        arguments=['0', '0', '0', '0', '0', '0', 'world', 'red/world']
+    )
+    
+    static_tf_green = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_green_world',
+        arguments=['0', '0', '0', '0', '0', '0', 'world', 'green/world']
     )
     
     # 4. Bridges (start after a delay)
@@ -294,6 +311,10 @@ def generate_launch_description():
         
         # 1. Start Gazebo first
         gazebo,
+        
+        # Static TF publishers for separate world frames
+        static_tf_red,
+        static_tf_green,
         
         # 2. Start robot state publishers (delayed)
         delayed_robot_state_pub_red,
