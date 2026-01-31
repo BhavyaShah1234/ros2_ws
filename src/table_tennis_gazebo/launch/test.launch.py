@@ -60,14 +60,27 @@ def generate_launch_description():
         launch_arguments={'gz_args': f'{world_file} -r'}.items(),
     )
     
-    # Clock bridge - required for use_sim_time to work
-    clock_bridge = Node(
+    # Unified bridge using YAML config for clock and camera topics
+    bridge_config_file = os.path.join(
+        get_package_share_directory('table_tennis_gazebo'),
+        'config',
+        'ros_gz_bridge.yaml'
+    )
+    
+    unified_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        name='clock_bridge',
+        name='ros_gz_bridge',
         output='screen',
-        parameters=[{'use_sim_time': use_sim_time}],
-        arguments=['/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock']
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'config_file': bridge_config_file
+        }]
+    )
+    
+    delayed_unified_bridge = TimerAction(
+        period=6.0,
+        actions=[unified_bridge]
     )
     
     # Robot state publisher - required for TF tree
@@ -117,7 +130,7 @@ def generate_launch_description():
     )
     
     delayed_rviz = TimerAction(
-        period=6.0,
+        period=15.0,
         actions=[rviz]
     )
     
@@ -156,7 +169,7 @@ def generate_launch_description():
         ),
         set_gz_resource_path,
         gazebo,
-        clock_bridge,
+        delayed_unified_bridge,
         delayed_robot_state_pub,
         delayed_spawn,
         delayed_rviz,

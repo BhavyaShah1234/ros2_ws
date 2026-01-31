@@ -272,12 +272,12 @@ def generate_launch_description():
     )
     
     delayed_rviz_red = TimerAction(
-        period=10.0,
+        period=15.0,
         actions=[rviz_red]
     )
     
     delayed_rviz_green = TimerAction(
-        period=10.5,
+        period=15.5,
         actions=[rviz_green]
     )
     
