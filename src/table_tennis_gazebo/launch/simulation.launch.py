@@ -162,7 +162,6 @@ def generate_launch_description():
     )
     
     delayed_spawn_green = TimerAction(
-    delayed_spawn_green = TimerAction(
         period=5.5,
         actions=[spawn_green]
     )
@@ -195,10 +194,10 @@ def generate_launch_description():
         actions=[bridge]
     )
     
-    # Ball spawner
+    # Ball spawner (using Python version with full action server implementation)
     ball_spawner = Node(
         package='table_tennis_gazebo',
-        executable='ball_spawner_node',
+        executable='ball_spawner_node.py',
         name='ball_spawner',
         output='screen',
         parameters=[{'use_sim_time': True}],
@@ -267,35 +266,21 @@ def generate_launch_description():
         actions=[load_arm_controller_green]
     )
     
-    # 7. Rviz for visualization (two separate windows)
-    rviz_red = Node(
+    # 7. Unified Rviz for visualizing both robots, cameras, and ball
+    rviz_config_dual = os.path.join(pkg_gazebo, 'rviz', 'dual_robots.rviz')
+    
+    rviz_unified = Node(
         package='rviz2',
         executable='rviz2',
-        name='rviz2_red',
-        namespace='red',
-        arguments=['-d', rviz_config_red],
+        name='rviz2_unified',
+        arguments=['-d', rviz_config_dual],
         parameters=[{'use_sim_time': True}],
         output='screen'
     )
     
-    rviz_green = Node(
-        package='rviz2',
-        executable='rviz2',
-        name='rviz2_green',
-        namespace='green',
-        arguments=['-d', rviz_config_green],
-        parameters=[{'use_sim_time': True}],
-        output='screen'
-    )
-    
-    delayed_rviz_red = TimerAction(
+    delayed_rviz_unified = TimerAction(
         period=15.0,
-        actions=[rviz_red]
-    )
-    
-    delayed_rviz_green = TimerAction(
-        period=15.5,
-        actions=[rviz_green]
+        actions=[rviz_unified]
     )
     
     return LaunchDescription([
@@ -336,9 +321,8 @@ def generate_launch_description():
         # 7. Ball spawner (delayed)
         delayed_ball_spawner,
         
-        # 8. Rviz windows (delayed) - one for each robot
-        delayed_rviz_red,
-        delayed_rviz_green,
+        # 8. Unified Rviz window (delayed)
+        delayed_rviz_unified,
     ])
 
 
