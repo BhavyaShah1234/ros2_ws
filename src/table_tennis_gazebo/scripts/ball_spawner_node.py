@@ -249,36 +249,119 @@ class BallSpawnerActionServer(Node):
         """
         Monitor ball pose using gz topic echo command.
         Runs in a separate thread to avoid blocking the action execution.
+        
+        Note: This implementation uses subprocess to monitor Gazebo topics.
+        The pose updates may be delayed or not work reliably in all cases.
+        A production implementation should use gz-transport Python bindings.
         """
         try:
-            # Use gz topic to subscribe to pose updates
-            cmd = ['gz', 'topic', '-e', '-t', '/world/arena/dynamic_pose/info']
+            # Use gz topic to subscribe to dynamic pose updates
+            cmd = ['gz', 'topic', '-e', '-t', '/world/arena/dynamic_pose/info', '-n', '100']
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                bufsize=1
+                bufsize=1,
+                universal_newlines=True
             )
+            
+            current_ball_data = {}
+            in_ball_entity = False
             
             for line in process.stdout:
                 if not self.ball_alive:
                     process.kill()
                     break
                 
-                # Parse pose information (simplified parsing)
+                line = line.strip()
+                
+                # Look for our ball entity
                 if 'name: "table_tennis_ball"' in line or \
                    f'name: "{self.current_ball_name}"' in line:
-                    # Read next lines for position
-                    try:
-                        # This is a simplified approach
-                        # In production, use proper protobuf parsing
-                        self.pose_received = True
-                    except Exception as e:
-                        self.get_logger().debug(f'Pose parsing error: {e}')
+                    in_ball_entity = True
+                    current_ball_data = {}
+                    continue
+                
+                if in_ball_entity:
+                    # Parse position
+                    if 'position {' in line:
+                        continue
+                    elif line.startswith('x:'):
+                        try:
+                            current_ball_data['x'] = float(line.split(':')[1].strip())
+                        except:
+                            pass
+                    elif line.startswith('y:') and 'x' in current_ball_data:
+                        try:
+                            current_ball_data['y'] = float(line.split(':')[1].strip())
+                        except:
+                            pass
+                    elif line.startswith('z:') and 'y' in current_ball_data:
+                        try:
+                            current_ball_data['z'] = float(line.split(':')[1].strip())
+                        except:
+                            pass
+                    
+                    # Parse linear velocity for stationary detection
+                    elif 'linear_velocity {' in line:
+                        continue
+                    elif line.startswith('x:') and 'z' in current_ball_data:
+                        try:
+                            vx = float(line.split(':')[1].strip())
+                            current_ball_data['vx'] = vx
+                        except:
+                            pass
+                    elif line.startswith('y:') and 'vx' in current_ball_data:
+                        try:
+                            vy = float(line.split(':')[1].strip())
+                            current_ball_data['vy'] = vy
+                        except:
+                            pass
+                    elif line.startswith('z:') and 'vy' in current_ball_data:
+                        try:
+                            vz = float(line.split(':')[1].strip())
+                            current_ball_data['vz'] = vz
+                            
+                            # We have complete data, update pose
+                            if all(k in current_ball_data for k in ['x', 'y', 'z', 'vx', 'vy', 'vz']):
+                                with self.pose_lock:
+                                    # Update previous pose
+                                    self.previous_pose.position.x = self.current_pose.position.x
+                                    self.previous_pose.position.y = self.current_pose.position.y
+                                    self.previous_pose.position.z = self.current_pose.position.z
+                                    
+                                    # Update current pose
+                                    self.current_pose.position.x = current_ball_data['x']
+                                    self.current_pose.position.y = current_ball_data['y']
+                                    self.current_pose.position.z = current_ball_data['z']
+                                    
+                                    # Calculate velocity magnitude
+                                    self.current_velocity = math.sqrt(
+                                        current_ball_data['vx']**2 + 
+                                        current_ball_data['vy']**2 + 
+                                        current_ball_data['vz']**2
+                                    )
+                                    
+                                    self.last_pose_time = self.get_clock().now()
+                                    self.pose_received = True
+                                
+                                # Reset for next entity
+                                in_ball_entity = False
+                                current_ball_data = {}
+                                
+                        except Exception as e:
+                            self.get_logger().debug(f'Velocity parsing error: {e}')
+                            in_ball_entity = False
+                    
+                    # End of entity
+                    elif line.startswith('}') and not line.startswith('} {'):
+                        in_ball_entity = False
                         
         except Exception as e:
             self.get_logger().error(f'Pose monitoring error: {e}')
+            self.get_logger().error('Ball pose tracking may not work correctly')
+            self.get_logger().info('This is a known issue with subprocess-based pose monitoring')
     
     def ball_exists(self):
         """Check if ball currently exists."""
