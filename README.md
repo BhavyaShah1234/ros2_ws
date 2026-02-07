@@ -11,6 +11,249 @@ This workspace provides a realistic table tennis simulation environment featurin
 - **Unified Rviz visualization** showing both robots, cameras, and ball
 - **Real-time TF transforms** with proper namespacing
 
+## First-Time Setup on New Machine
+
+Follow these steps when cloning this workspace to a new machine to ensure ros2_control and all dependencies are properly configured.
+
+### Step 1: Install ROS 2 Jazzy
+
+```bash
+# Set up ROS 2 apt repository
+sudo apt update && sudo apt install -y software-properties-common
+sudo add-apt-repository universe
+sudo apt update && sudo apt install -y curl
+sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+# Install ROS 2 Jazzy Desktop
+sudo apt update
+sudo apt install -y ros-jazzy-desktop
+```
+
+### Step 2: Install Gazebo Harmonic
+
+```bash
+# Add Gazebo repository
+sudo wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
+
+# Install Gazebo Harmonic
+sudo apt update
+sudo apt install -y gz-harmonic ros-jazzy-ros-gz
+```
+
+### Step 3: Install ros2_control and Dependencies
+
+**This is the critical step for controller activation!**
+
+```bash
+# Install ros2_control packages
+sudo apt install -y \
+  ros-jazzy-ros2-control \
+  ros-jazzy-ros2-controllers \
+  ros-jazzy-gz-ros2-control \
+  ros-jazzy-controller-manager \
+  ros-jazzy-joint-state-broadcaster \
+  ros-jazzy-joint-trajectory-controller \
+  ros-jazzy-position-controllers \
+  ros-jazzy-effort-controllers \
+  ros-jazzy-velocity-controllers
+
+# Install additional ROS 2 tools
+sudo apt install -y \
+  ros-jazzy-xacro \
+  ros-jazzy-robot-state-publisher \
+  ros-jazzy-joint-state-publisher \
+  ros-jazzy-joint-state-publisher-gui \
+  ros-jazzy-rviz2 \
+  ros-jazzy-moveit \
+  python3-colcon-common-extensions \
+  python3-vcstool \
+  python3-rosdep
+```
+
+### Step 4: Clone and Build Workspace
+
+```bash
+# Clone the workspace
+cd ~
+git clone https://github.com/BhavyaShah1234/ros2_ws
+cd ros2_ws
+
+# Initialize rosdep (if first time on this machine)
+sudo rosdep init || true
+rosdep update
+
+# Install workspace dependencies
+rosdep install --from-paths src --ignore-src -r -y
+
+# Build the workspace
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+```
+
+### Step 5: Configure bashrc
+
+Add these lines to your `~/.bashrc`:
+
+```bash
+# ROS 2 Jazzy setup
+source /opt/ros/jazzy/setup.bash
+
+# Workspace setup
+source ~/ros2_ws/install/setup.bash
+
+# Gazebo resource paths
+export GZ_SIM_RESOURCE_PATH=$HOME/ros2_ws/install/table_tennis_gazebo/share/table_tennis_gazebo/models:$HOME/ros2_ws/install/franka_description/share/franka_description:$HOME/ros2_ws/install/table_tennis_description/share/table_tennis_description:$GZ_SIM_RESOURCE_PATH
+
+# Colcon shortcuts (optional)
+source /usr/share/colcon_cd/function/colcon_cd.sh
+export _colcon_cd_root=/opt/ros/jazzy/
+source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
+```
+
+**Important**: If you have CUDA or other library paths, append them to `LD_LIBRARY_PATH` instead of overwriting:
+
+```bash
+# CORRECT: Append to existing path
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+# WRONG: This breaks ROS 2!
+# export LD_LIBRARY_PATH=/usr/local/cuda/lib64
+```
+
+Then source the file:
+
+```bash
+source ~/.bashrc
+```
+
+### Step 6: Verify Installation
+
+Test that controllers are available:
+
+```bash
+# Start a terminal and verify ros2_control plugins
+ros2 pkg list | grep ros2_control
+ros2 pkg list | grep controller
+
+# Check for critical packages (should see all of these)
+ros2 pkg list | grep -E "ros2_control|joint_trajectory_controller|gz_ros2_control"
+```
+
+Expected output should include:
+- `controller_manager`
+- `joint_trajectory_controller`
+- `gz_ros2_control`
+- `ros2_control`
+- `ros2_controllers`
+
+### Step 7: Test Launch
+
+```bash
+# Clean any existing processes
+pkill -9 -f "gz|rviz|simulation"
+
+# Launch simulation
+cd ~/ros2_ws
+colcon build --symlink-install && source ~/.bashrc
+ros2 launch table_tennis_gazebo simulation.launch.py > test.log 2>&1 &
+
+# Wait for initialization
+sleep 25
+
+# Verify controllers are loaded
+ros2 control list_controllers
+
+# Should see (after ~25 seconds):
+# red/arm_controller[joint_trajectory_controller/JointTrajectoryController] active
+# green/arm_controller[joint_trajectory_controller/JointTrajectoryController] active
+# red/joint_state_broadcaster[joint_state_broadcaster/JointStateBroadcaster] active
+# green/joint_state_broadcaster[joint_state_broadcaster/JointStateBroadcaster] active
+```
+
+### Troubleshooting Controllers
+
+**Issue**: Controllers not activating or "Error" status in RViz RobotModel
+
+**Common Causes & Solutions**:
+
+1. **Missing ros2_control packages**
+   ```bash
+   # Install missing packages
+   sudo apt install -y ros-jazzy-gz-ros2-control ros-jazzy-controller-manager
+   colcon build --symlink-install
+   source ~/.bashrc
+   ```
+
+2. **LD_LIBRARY_PATH overwritten**
+   ```bash
+   # Check if ROS libraries are in path
+   echo $LD_LIBRARY_PATH | grep ros
+   
+   # If not found, fix ~/.bashrc (see Step 5 above)
+   # Then: source ~/.bashrc
+   ```
+
+3. **Controllers timing out during spawn**
+   ```bash
+   # Check controller manager logs
+   grep -i "controller_manager" test.log
+   
+   # Common fix: Wait longer for Gazebo initialization
+   sleep 30  # Instead of 25
+   ```
+
+4. **URDF not loading in RViz**
+   ```bash
+   # Verify robot_description topic
+   ros2 topic list | grep robot_description
+   
+   # Check if robot_state_publisher is running
+   ros2 node list | grep robot_state_publisher
+   
+   # Rebuild with clean install
+   rm -rf build install log
+   colcon build --symlink-install
+   source ~/.bashrc
+   ```
+
+5. **Gazebo plugin not found**
+   ```bash
+   # Check for gz_ros2_control plugin
+   gz sim --help | grep ros2_control
+   
+   # Reinstall if missing
+   sudo apt install --reinstall ros-jazzy-gz-ros2-control
+   ```
+
+6. **Controller spawner fails**
+   ```bash
+   # Check spawner logs
+   grep "spawner" test.log
+   
+   # Often needs GZ_SIM_RESOURCE_PATH set correctly
+   export GZ_SIM_RESOURCE_PATH=$HOME/ros2_ws/install/table_tennis_gazebo/share/table_tennis_gazebo/models:$HOME/ros2_ws/install/franka_description/share/franka_description:$GZ_SIM_RESOURCE_PATH
+   ```
+
+**Verification after fixes**:
+```bash
+# Clean everything
+pkill -9 -f "gz|rviz|simulation"
+rm -rf build install log
+
+# Full rebuild
+colcon build --symlink-install
+source ~/.bashrc
+
+# Launch and verify
+ros2 launch table_tennis_gazebo simulation.launch.py > test.log 2>&1 &
+sleep 30
+ros2 control list_controllers
+
+# Test robot movement
+ros2 action send_goal /red/arm_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "{trajectory: {joint_names: [fr3_joint1, fr3_joint2, fr3_joint3, fr3_joint4, fr3_joint5, fr3_joint6, fr3_joint7], points: [{positions: [0.0, -0.3, 0.0, -1.5, 0.0, 1.2, 0.785], time_from_start: {sec: 2}}]}}"
+```
+
 ## Quick Start
 
 ### Prerequisites
@@ -392,4 +635,4 @@ For issues specific to this simulation, check:
 
 ---
 
-**Last Updated**: February 1, 2026
+**Last Updated**: February 6, 2026
