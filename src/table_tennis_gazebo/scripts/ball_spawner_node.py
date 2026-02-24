@@ -20,6 +20,7 @@ from table_tennis_gazebo.action import SpawnBall
 from geometry_msgs.msg import Pose
 from std_msgs.msg import String
 from ros_gz_interfaces.srv import SpawnEntity, DeleteEntity
+from ros_gz_interfaces.msg import Entity
 
 import math
 import time
@@ -85,6 +86,7 @@ class BallSpawnerActionServer(Node):
         self.spawn_time = None
         self.last_pose_time = None
         self.pose_received = False
+        self.ball_has_moved = False  # Track if ball has moved from spawn position
         
         # Gazebo transport subscription (using gz topic command)
         self.pose_lock = threading.Lock()
@@ -148,6 +150,7 @@ class BallSpawnerActionServer(Node):
         self.previous_pose.position.z = goal.z
         self.current_velocity = 0.0
         self.last_pose_time = self.spawn_time
+        self.ball_has_moved = False
         
         # Start pose monitoring thread
         pose_thread = threading.Thread(
@@ -207,16 +210,29 @@ class BallSpawnerActionServer(Node):
             with self.pose_lock:
                 z = self.current_pose.position.z
                 vel = self.current_velocity
+                
+                # Check if ball has moved significantly from spawn position
+                if not self.ball_has_moved and vel > 0.1:
+                    self.ball_has_moved = True
+                    self.get_logger().info(f'Ball started moving with velocity {vel:.3f} m/s')
+                
+                # Check if pose updates have stopped (ball stationary in Gazebo)
+                time_since_update = (self.get_clock().now() - self.last_pose_time).nanoseconds / 1e9 if self.last_pose_time else 0
             
             # Ball radius is 0.02m, ground is at z=0
             # Table top is at z=0.76m
             hit_ground = z < 0.05
             below_table = z < 0.65
-            is_stationary = (time_alive > 1.0) and (vel < 0.005)
+            # Only check stationary after ball has moved (to avoid false positives at spawn)
+            is_stationary = self.ball_has_moved and (time_alive > 2.0) and (vel < 0.01)
+            # Also delete if no pose updates for 3+ seconds after ball has moved (Gazebo stops publishing stationary objects)
+            pose_timeout = self.ball_has_moved and (time_alive > 3.0) and (time_since_update > 3.0)
             
-            if hit_ground or below_table or is_stationary:
+            if hit_ground or below_table or is_stationary or pose_timeout:
                 if hit_ground or below_table:
                     self.get_logger().info(f'Ball hit the ground! z={z:.4f}')
+                elif pose_timeout:
+                    self.get_logger().info(f'Ball detected as stationary (no pose updates for {time_since_update:.1f}s)')
                 else:
                     self.get_logger().info(f'Ball became stationary! velocity={vel:.4f} m/s')
                 
@@ -249,36 +265,107 @@ class BallSpawnerActionServer(Node):
         """
         Monitor ball pose using gz topic echo command.
         Runs in a separate thread to avoid blocking the action execution.
+        
+        Note: This implementation uses subprocess to monitor Gazebo topics.
+        The pose updates may be delayed or not work reliably in all cases.
+        A production implementation should use gz-transport Python bindings.
         """
         try:
-            # Use gz topic to subscribe to pose updates
-            cmd = ['gz', 'topic', '-e', '-t', '/world/arena/dynamic_pose/info']
+            # Use gz topic to subscribe to dynamic pose updates
+            cmd = ['gz', 'topic', '-e', '-t', '/world/arena/dynamic_pose/info', '-n', '100']
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                bufsize=1
+                bufsize=1,
+                universal_newlines=True
             )
+            
+            current_ball_data = {}
+            in_ball_entity = False
+            in_position_block = False
+            last_update_time = None
             
             for line in process.stdout:
                 if not self.ball_alive:
                     process.kill()
                     break
                 
-                # Parse pose information (simplified parsing)
+                line = line.strip()
+                
+                # Look for our ball entity
                 if 'name: "table_tennis_ball"' in line or \
                    f'name: "{self.current_ball_name}"' in line:
-                    # Read next lines for position
-                    try:
-                        # This is a simplified approach
-                        # In production, use proper protobuf parsing
-                        self.pose_received = True
-                    except Exception as e:
-                        self.get_logger().debug(f'Pose parsing error: {e}')
+                    in_ball_entity = True
+                    current_ball_data = {'x': 0.0, 'y': 0.0, 'z': 0.0}
+                    in_position_block = False
+                    continue
+                
+                if in_ball_entity:
+                    # Parse position block
+                    if 'position {' in line:
+                        in_position_block = True
+                        continue
+                    elif line == '}':
+                        # End of a block
+                        if in_position_block:
+                            # We have complete position data, update pose and calculate velocity
+                            in_ball_entity = False
+                            in_position_block = False
+                            
+                            current_time = time.time()
+                            
+                            with self.pose_lock:
+                                # Store previous pose for velocity calculation
+                                prev_x = self.current_pose.position.x
+                                prev_y = self.current_pose.position.y
+                                prev_z = self.current_pose.position.z
+                                
+                                # Update current pose
+                                self.current_pose.position.x = current_ball_data['x']
+                                self.current_pose.position.y = current_ball_data['y']
+                                self.current_pose.position.z = current_ball_data['z']
+                                
+                                # Calculate velocity magnitude from position change
+                                if last_update_time is not None and self.pose_received:
+                                    dt = current_time - last_update_time
+                                    if dt > 0.001:  # Avoid division by zero
+                                        dx = current_ball_data['x'] - prev_x
+                                        dy = current_ball_data['y'] - prev_y
+                                        dz = current_ball_data['z'] - prev_z
+                                        distance = math.sqrt(dx*dx + dy*dy + dz*dz)
+                                        self.current_velocity = distance / dt
+                                
+                                self.last_pose_time = self.get_clock().now()
+                                self.pose_received = True
+                            
+                            last_update_time = current_time
+                            current_ball_data = {}
+                        continue
+                    
+                    # Parse field values (only in position block)
+                    if in_position_block:
+                        if line.startswith('x:'):
+                            try:
+                                current_ball_data['x'] = float(line.split(':')[1].strip())
+                            except:
+                                pass
+                        elif line.startswith('y:'):
+                            try:
+                                current_ball_data['y'] = float(line.split(':')[1].strip())
+                            except:
+                                pass
+                        elif line.startswith('z:'):
+                            try:
+                                current_ball_data['z'] = float(line.split(':')[1].strip())
+                            except:
+                                pass
                         
         except Exception as e:
             self.get_logger().error(f'Pose monitoring error: {e}')
+            self.get_logger().error('Ball pose tracking may not work correctly')
+            self.get_logger().info('This is a known issue with subprocess-based pose monitoring')
     
     def ball_exists(self):
         """Check if ball currently exists."""
@@ -379,23 +466,44 @@ class BallSpawnerActionServer(Node):
             return False
     
     async def delete_ball(self):
-        """Delete the current ball from Gazebo."""
-        if not self.delete_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().warn('Delete service not available')
-            return
+        """
+        Delete the current ball from Gazebo using gz service command.
         
-        request = DeleteEntity.Request()
-        request.name = self.current_ball_name
-        
+        Note: Using subprocess instead of ROS 2 service client because the 
+        ros_gz service bridging has reliability issues in Jazzy/Harmonic.
+        """
         try:
-            future = self.delete_client.call_async(request)
-            await future
-            if future.result() is not None:
-                self.get_logger().info('Ball deleted successfully')
+            cmd = [
+                'gz', 'service',
+                '-s', '/world/arena/remove',
+                '--reqtype', 'gz.msgs.Entity',
+                '--reptype', 'gz.msgs.Boolean',
+                '--timeout', '2000',
+                '--req', f'name: "{self.current_ball_name}" type: MODEL'
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=3.0
+            )
+            
+            if result.returncode == 0:
+                self.get_logger().info(f'Ball "{self.current_ball_name}" deleted successfully')
+                return True
             else:
-                self.get_logger().warn('Failed to delete ball')
+                self.get_logger().warn(
+                    f'Failed to delete ball: {result.stderr if result.stderr else "Unknown error"}'
+                )
+                return False
+                
+        except subprocess.TimeoutExpired:
+            self.get_logger().error('Delete command timed out')
+            return False
         except Exception as e:
             self.get_logger().error(f'Exception during delete: {e}')
+            return False
 
 
 def main(args=None):

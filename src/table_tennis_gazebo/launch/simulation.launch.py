@@ -166,6 +166,22 @@ def generate_launch_description():
         actions=[spawn_green]
     )
     
+    # Static transforms to create separate world frames for each robot
+    # This creates red/world and green/world frames linked to the main world
+    static_tf_red = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_red_world',
+        arguments=['0', '0', '0', '0', '0', '0', 'world', 'red/world']
+    )
+    
+    static_tf_green = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_green_world',
+        arguments=['0', '0', '0', '0', '0', '0', 'world', 'green/world']
+    )
+    
     # 4. Bridges (start after a delay)
     bridge = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -178,10 +194,10 @@ def generate_launch_description():
         actions=[bridge]
     )
     
-    # Ball spawner
+    # Ball spawner (using Python version with full action server implementation)
     ball_spawner = Node(
         package='table_tennis_gazebo',
-        executable='ball_spawner_node',
+        executable='ball_spawner_node.py',
         name='ball_spawner',
         output='screen',
         parameters=[{'use_sim_time': True}],
@@ -250,35 +266,21 @@ def generate_launch_description():
         actions=[load_arm_controller_green]
     )
     
-    # 7. Rviz for visualization (two separate windows)
-    rviz_red = Node(
+    # 7. Unified Rviz for visualizing both robots, cameras, and ball
+    rviz_config_dual = os.path.join(pkg_gazebo, 'rviz', 'dual_robots.rviz')
+    
+    rviz_unified = Node(
         package='rviz2',
         executable='rviz2',
-        name='rviz2_red',
-        namespace='red',
-        arguments=['-d', rviz_config_red],
+        name='rviz2_unified',
+        arguments=['-d', rviz_config_dual],
         parameters=[{'use_sim_time': True}],
         output='screen'
     )
     
-    rviz_green = Node(
-        package='rviz2',
-        executable='rviz2',
-        name='rviz2_green',
-        namespace='green',
-        arguments=['-d', rviz_config_green],
-        parameters=[{'use_sim_time': True}],
-        output='screen'
-    )
-    
-    delayed_rviz_red = TimerAction(
-        period=10.0,
-        actions=[rviz_red]
-    )
-    
-    delayed_rviz_green = TimerAction(
-        period=10.5,
-        actions=[rviz_green]
+    delayed_rviz_unified = TimerAction(
+        period=15.0,
+        actions=[rviz_unified]
     )
     
     return LaunchDescription([
@@ -294,6 +296,10 @@ def generate_launch_description():
         
         # 1. Start Gazebo first
         gazebo,
+        
+        # Static TF publishers for separate world frames
+        static_tf_red,
+        static_tf_green,
         
         # 2. Start robot state publishers (delayed)
         delayed_robot_state_pub_red,
@@ -315,9 +321,8 @@ def generate_launch_description():
         # 7. Ball spawner (delayed)
         delayed_ball_spawner,
         
-        # 8. Rviz windows (delayed) - one for each robot
-        delayed_rviz_red,
-        delayed_rviz_green,
+        # 8. Unified Rviz window (delayed)
+        delayed_rviz_unified,
     ])
 
 

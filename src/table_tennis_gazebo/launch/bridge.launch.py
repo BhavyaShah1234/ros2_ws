@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
+"""
+Launch file for ROS-Gazebo bridges for dual robot simulation.
+Uses YAML config file for proper Gazebo Harmonic + ROS 2 Jazzy integration.
+"""
 
 import os
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
@@ -10,9 +15,39 @@ from launch_ros.actions import Node
 def generate_launch_description():
     """Launch file for ROS-Gazebo bridges"""
     
+    # Package directory
+    pkg_gazebo = get_package_share_directory('table_tennis_gazebo')
+    
+    # Bridge config file
+    bridge_config_file = os.path.join(
+        pkg_gazebo,
+        'config',
+        'ros_gz_bridge_dual.yaml'
+    )
+    
     # Launch arguments
-    namespace_red = LaunchConfiguration('namespace_red', default='red')
-    namespace_green = LaunchConfiguration('namespace_green', default='green')
+    use_sim_time = LaunchConfiguration('use_sim_time', default='true')
+    
+    # Unified bridge node for all topics
+    unified_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        name='ros_gz_bridge',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'config_file': bridge_config_file
+        }]
+    )
+    
+    return LaunchDescription([
+        DeclareLaunchArgument(
+            'use_sim_time',
+            default_value='true',
+            description='Use simulation time'
+        ),
+        unified_bridge,
+    ])
     
     return LaunchDescription([
         
