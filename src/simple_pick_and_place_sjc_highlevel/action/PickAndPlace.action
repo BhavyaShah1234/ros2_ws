@@ -1,0 +1,12 @@
+# Goal: High-level pick and place command
+string object_color     # red, green, or blue
+string object_shape     # cylinder, cuboid, sphere, or cone
+string target_bin       # red, green, or blue
+---
+# Result: Success status
+bool success
+string message
+---
+# Feedback: Current operation phase  
+string phase            # detecting, approaching, grasping, lifting, moving, placing, opening
+float64 progress

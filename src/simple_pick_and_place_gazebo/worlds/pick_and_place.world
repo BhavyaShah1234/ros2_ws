@@ -1,0 +1,569 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <world name="pick_and_place">
+    
+    <!-- Physics -->
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics">
+      <engine>
+        <filename>gz-physics-dartsim-plugin</filename>
+      </engine>
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </plugin>
+    
+    <!-- User commands (to spawn models) -->
+    <plugin filename="gz-sim-user-commands-system" 
+            name="gz::sim::systems::UserCommands"/>
+    
+    <!-- Scene broadcaster -->
+    <plugin filename="gz-sim-scene-broadcaster-system" 
+            name="gz::sim::systems::SceneBroadcaster"/>
+    
+    <!-- Sensors -->
+    <plugin filename="gz-sim-sensors-system" 
+            name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    
+    <!-- Lighting -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+    
+    <light type="point" name="overhead_light">
+      <pose>0 0 2 0 0 0</pose>
+      <diffuse>0.5 0.5 0.5 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <attenuation>
+        <range>20</range>
+        <constant>0.5</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <cast_shadows>false</cast_shadows>
+    </light>
+    
+    <!-- Ground plane -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>10 10</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>10 10</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+            <specular>0.8 0.8 0.8 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <!-- Work table removed for ground-level robot setup -->
+    
+    <!-- Overhead camera -->
+    <model name="overhead_camera">
+      <static>true</static>
+      <pose>1.5 0.0 1.5 0.0 0.0 1.570796</pose>
+      <link name="link">
+        <sensor name="camera" type="rgbd_camera">
+          <camera>
+            <horizontal_fov>1.397</horizontal_fov>
+            <image>
+              <width>640</width>
+              <height>480</height>
+              <format>R8G8B8</format>
+            </image>
+            <clip>
+              <near>0.1</near>
+              <far>100</far>
+            </clip>
+            <depth_camera>
+              <clip>
+                <near>0.1</near>
+                <far>100</far>
+              </clip>
+            </depth_camera>
+          </camera>
+          <always_on>true</always_on>
+          <update_rate>30</update_rate>
+          <visualize>true</visualize>
+          <topic>overhead_camera</topic>
+        </sensor>
+      </link>
+    </model>
+    
+    <!-- Red bin (front-right, 45 degrees) -->
+    <model name="red_bin">
+      <static>true</static>
+      <pose>0.212 -0.212 0.125 0 0 0</pose>
+      <link name="link">
+        <!-- Bottom -->
+        <collision name="bottom">
+          <pose>0 0 -0.05 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.2 0.2 0.01</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="bottom">
+          <pose>0 0 -0.05 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.2 0.2 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.8 0.0 0.0 1</ambient>
+            <diffuse>0.9 0.1 0.1 1</diffuse>
+          </material>
+        </visual>
+        
+        <!-- Side walls (hollow bin) -->
+        <collision name="wall_front">
+          <pose>0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_front">
+          <pose>0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.8 0.0 0.0 1</ambient>
+            <diffuse>0.9 0.1 0.1 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_back">
+          <pose>-0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_back">
+          <pose>-0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.8 0.0 0.0 1</ambient>
+            <diffuse>0.9 0.1 0.1 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_left">
+          <pose>0 0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_left">
+          <pose>0 0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.8 0.0 0.0 1</ambient>
+            <diffuse>0.9 0.1 0.1 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_right">
+          <pose>0 -0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_right">
+          <pose>0 -0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.8 0.0 0.0 1</ambient>
+            <diffuse>0.9 0.1 0.1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <!-- Green bin (back-right, 135 degrees) -->
+    <model name="green_bin">
+      <static>true</static>
+      <pose>-0.212 -0.212 0.125 0 0 0</pose>
+      <link name="link">
+        <collision name="bottom">
+          <pose>0 0 -0.05 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.2 0.2 0.01</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="bottom">
+          <pose>0 0 -0.05 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.2 0.2 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.0 0.8 0.0 1</ambient>
+            <diffuse>0.1 0.9 0.1 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_front">
+          <pose>0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_front">
+          <pose>0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.0 0.8 0.0 1</ambient>
+            <diffuse>0.1 0.9 0.1 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_back">
+          <pose>-0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_back">
+          <pose>-0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.0 0.8 0.0 1</ambient>
+            <diffuse>0.1 0.9 0.1 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_left">
+          <pose>0 0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_left">
+          <pose>0 0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.0 0.8 0.0 1</ambient>
+            <diffuse>0.1 0.9 0.1 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_right">
+          <pose>0 -0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_right">
+          <pose>0 -0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.0 0.8 0.0 1</ambient>
+            <diffuse>0.1 0.9 0.1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <!-- Blue bin (back-left, 225 degrees) -->
+    <model name="blue_bin">
+      <static>true</static>
+      <pose>-0.212 0.212 0.125 0 0 0</pose>
+      <link name="link">
+        <collision name="bottom">
+          <pose>0 0 -0.05 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.2 0.2 0.01</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="bottom">
+          <pose>0 0 -0.05 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.2 0.2 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.0 0.0 0.8 1</ambient>
+            <diffuse>0.1 0.1 0.9 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_front">
+          <pose>0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_front">
+          <pose>0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.0 0.0 0.8 1</ambient>
+            <diffuse>0.1 0.1 0.9 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_back">
+          <pose>-0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_back">
+          <pose>-0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.0 0.0 0.8 1</ambient>
+            <diffuse>0.1 0.1 0.9 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_left">
+          <pose>0 0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_left">
+          <pose>0 0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.0 0.0 0.8 1</ambient>
+            <diffuse>0.1 0.1 0.9 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_right">
+          <pose>0 -0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_right">
+          <pose>0 -0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.0 0.0 0.8 1</ambient>
+            <diffuse>0.1 0.1 0.9 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+    <!-- Yellow bin (front-left, 315 degrees) -->
+    <model name="yellow_bin">
+      <static>true</static>
+      <pose>0.212 0.212 0.125 0 0 0</pose>
+      <link name="link">
+        <collision name="bottom">
+          <pose>0 0 -0.05 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.2 0.2 0.01</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="bottom">
+          <pose>0 0 -0.05 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.2 0.2 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1.0 1.0 0.0 1</ambient>
+            <diffuse>1.0 1.0 0.1 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_front">
+          <pose>0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_front">
+          <pose>0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1.0 1.0 0.0 1</ambient>
+            <diffuse>1.0 1.0 0.1 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_back">
+          <pose>-0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_back">
+          <pose>-0.095 0 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.2 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1.0 1.0 0.0 1</ambient>
+            <diffuse>1.0 1.0 0.1 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_left">
+          <pose>0 0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_left">
+          <pose>0 0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1.0 1.0 0.0 1</ambient>
+            <diffuse>1.0 1.0 0.1 1</diffuse>
+          </material>
+        </visual>
+        
+        <collision name="wall_right">
+          <pose>0 -0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="wall_right">
+          <pose>0 -0.095 0 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.18 0.01 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1.0 1.0 0.0 1</ambient>
+            <diffuse>1.0 1.0 0.1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    
+  </world>
+</sdf>

@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  
+  <xacro:macro name="gazebo_ros2_control" params="arm_prefix">
+    
+    <gazebo>
+      <plugin filename="gz_ros2_control-system" 
+              name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>$(find simple_pick_and_place_gazebo)/config/controllers.yaml</parameters>
+        <controller_manager_name>controller_manager</controller_manager_name>
+      </plugin>
+    </gazebo>
+    
+    <!-- Gazebo-specific physics properties for gripper -->
+    <gazebo reference="${arm_prefix}fr3_finger_joint1">
+      <implicitSpringDamper>true</implicitSpringDamper>
+    </gazebo>
+    
+    <gazebo reference="${arm_prefix}fr3_finger_joint2">
+      <implicitSpringDamper>true</implicitSpringDamper>
+    </gazebo>
+    
+  </xacro:macro>
+  
+</robot>

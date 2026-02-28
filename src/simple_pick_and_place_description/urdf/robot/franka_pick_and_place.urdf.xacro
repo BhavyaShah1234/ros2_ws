@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="franka_pick_and_place">
+  
+  <!-- Include the Franka robot macro -->
+  <xacro:include filename="$(find franka_description)/robots/common/franka_robot.xacro"/>
+  
+  <!-- Arguments -->
+  <xacro:arg name="robot_type" default="fr3"/>
+  <xacro:arg name="hand" default="true"/>
+  <xacro:arg name="ee_id" default="franka_hand"/>
+  <xacro:arg name="arm_prefix" default=""/>
+  <xacro:arg name="use_fake_hardware" default="false"/>
+  <xacro:arg name="ros2_control" default="true"/>
+  <xacro:arg name="gazebo" default="true"/>
+  <xacro:arg name="robot_ip" default=""/>
+  
+  <!-- Convert args to properties for proper boolean evaluation -->
+  <xacro:property name="use_ros2_control" value="$(arg ros2_control)"/>
+  <xacro:property name="use_gazebo" value="$(arg gazebo)"/>
+  
+  <!-- Load robot parameters -->
+  <xacro:property name="robot_type_arg" value="$(arg robot_type)"/>
+  <xacro:property name="joint_limits" 
+    value="${xacro.load_yaml('$(find franka_description)/robots/' + robot_type_arg + '/joint_limits.yaml')}"/>
+  <xacro:property name="kinematics" 
+    value="${xacro.load_yaml('$(find franka_description)/robots/' + robot_type_arg + '/kinematics.yaml')}"/>
+  <xacro:property name="inertials" 
+    value="${xacro.load_yaml('$(find franka_description)/robots/' + robot_type_arg + '/inertials.yaml')}"/>
+  <xacro:property name="dynamics" 
+    value="${xacro.load_yaml('$(find franka_description)/robots/' + robot_type_arg + '/dynamics.yaml')}"/>
+  
+  <!-- Instantiate Franka robot with ros2_control disabled (we'll add it separately) -->
+  <xacro:franka_robot
+    robot_type="$(arg robot_type)"
+    joint_limits="${joint_limits}"
+    kinematics="${kinematics}"
+    inertials="${inertials}"
+    dynamics="${dynamics}"
+    gazebo="$(arg gazebo)"
+    hand="$(arg hand)"
+    ee_id="$(arg ee_id)"
+    ros2_control="false"
+    robot_ip="$(arg robot_ip)"
+    use_fake_hardware="$(arg use_fake_hardware)"
+    arm_prefix="$(arg arm_prefix)"
+    connected_to="world"/>
+  
+  <!-- Include ros2_control configuration if enabled -->
+  <xacro:if value="${use_ros2_control}">
+    <xacro:include filename="$(find simple_pick_and_place_description)/urdf/control/ros2_control.urdf.xacro"/>
+    <xacro:pick_and_place_ros2_control 
+      arm_prefix="$(arg arm_prefix)" 
+      robot_type="$(arg robot_type)"
+      use_fake_hardware="$(arg use_fake_hardware)"/>
+  </xacro:if>
+  
+  <!-- Include Gazebo control plugin if gazebo is enabled -->
+  <xacro:if value="${use_gazebo}">
+    <xacro:include filename="$(find simple_pick_and_place_description)/urdf/control/gazebo_ros2_control.urdf.xacro"/>
+    <xacro:gazebo_ros2_control arm_prefix="$(arg arm_prefix)"/>
+  </xacro:if>
+
+</robot>

@@ -1,0 +1,11 @@
+# Goal: Target joint positions (7 DOF)
+float64[7] target_joints
+---
+# Result: Success status
+bool success
+string message
+float64[7] final_joints
+---
+# Feedback: Current progress
+float64 progress
+string status

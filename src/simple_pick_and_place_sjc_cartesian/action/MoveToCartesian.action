@@ -1,0 +1,11 @@
+# Goal: Target Cartesian pose for the end-effector
+geometry_msgs/Pose target_pose
+---
+# Result: Success status and final achieved pose
+bool success
+string message
+geometry_msgs/Pose final_pose
+---
+# Feedback: Current progress
+float64 progress
+string status
