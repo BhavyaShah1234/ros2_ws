@@ -1,0 +1,28 @@
+# Pose used to spawn the overhead camera (see
+# franka_with_overhead_camera.launch.py). Applied via `ros_gz_sim create`'s
+# -x/-y/-z/-R/-P/-Y flags, which unconditionally override any <pose> in
+# models/overhead_camera/model.sdf -- so this file, not the SDF, is what
+# actually controls where the camera ends up. Edits here take effect on the
+# next `ros2 launch`, no rebuild needed.
+overhead_camera:
+  # Horizontal position, in meters, in the world frame (robot base = origin).
+  x: 0.0
+  y: 0.0
+
+  # Height, in meters, is robot_height_m + clearance_m:
+  #  - robot_height_m: highest point of the FR3 arm (the wrist cluster) in
+  #    its default Gazebo spawn pose, from forward kinematics of
+  #    franka_arm.ros2_control.xacro's baked-in initial joint values.
+  #    Shouldn't need to change unless the robot's default pose does.
+  #  - clearance_m: how far above that the camera sits. This is the knob to
+  #    turn to change the camera's height/ground footprint.
+  robot_height_m: 0.697
+  clearance_m: 0.30
+
+  # Orientation, in radians (roll, pitch, yaw). pitch = pi/2 (1.5707963)
+  # points the camera's optical axis (local +X) straight down at the floor.
+  # Change yaw to rotate the image; change roll/pitch away from this value
+  # to tilt the view off-vertical.
+  roll: 0.0
+  pitch: 1.5707963
+  yaw: 0.0
