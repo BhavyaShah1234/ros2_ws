@@ -8,9 +8,16 @@
 # by the 3 calibration markers in calibration_markers.yaml at launch time
 # (grid x in [0, cells_per_side] -> world x in [min marker x, max marker x],
 # same for y), so moving the blocks moves and rescales the maze with them.
-# Entrance is the open wall at the (min x, min y) corner -- the green
-# marker's corner; exit is at the (max x, max y) corner -- the empty 4th
-# corner of the square.
+# Entrance and exit are always on the pair of edges at y=y_min and y=y_max
+# (never y=x_min/x_max), matching mazegenerator.net's "Starts at: Top" +
+# opposite-edge exit convention -- regardless of the maze's random internal
+# passages, cell (0,0)'s boundary wall at y=y_min and cell
+# (cells_per_side-1, cells_per_side-1)'s boundary wall at y=y_max are always
+# the two that get opened. With the current calibration_markers.yaml values
+# (blue (0.6,0.3), green (0.6,-0.3), yellow (1.2,0.3)): entrance is at the
+# green marker's corner (min x, min y); exit is at the yellow marker's
+# corner (max x, max y) -- NOT the empty 4th corner (max x, min y), which
+# has no opening on either edge.
 maze:
   cells_per_side: 10
   wall_thickness_m: 0.006
