@@ -2,18 +2,19 @@
 <sdf version="1.9">
   <model name="overhead_camera">
     <!--
-      Fixed overhead camera, centered above the robot base (world origin) and
-      pitched 90 degrees so its optical axis (local +X) points straight down
-      the world -Z axis at the floor.
+      Fixed overhead camera, meant to be centered above the robot base (world
+      origin) and pitched 90 degrees so its optical axis (local +X) points
+      straight down the world -Z axis at the floor.
 
-      Height derivation: forward kinematics of the FR3 in its default Gazebo
-      spawn pose (joint2=-45deg, joint4=-135deg, joint6=90deg, joint7=45deg,
-      the pose baked into franka_arm.ros2_control.xacro) puts the highest
-      point of the arm (the wrist cluster, links 5/6/7) at ~0.697 m above the
-      base. This camera sits 0.10 m above that: 0.697 + 0.10 = 0.797 m.
+      No <pose> here: this model is always spawned via `ros_gz_sim create`
+      (see franka_with_overhead_camera.launch.py), whose -x/-y/-z/-R/-P/-Y
+      arguments unconditionally override any pose set here, even when left
+      at their default of 0: verified empirically by spawning this file
+      with no pose flags and observing it land at the origin with identity
+      orientation. The actual mount pose, and the FR3-forward-kinematics
+      derivation of its height, live in that launch file instead.
     -->
     <static>true</static>
-    <pose>0 0 0.797 0 1.5707963 0</pose>
 
     <link name="link">
       <inertial>
