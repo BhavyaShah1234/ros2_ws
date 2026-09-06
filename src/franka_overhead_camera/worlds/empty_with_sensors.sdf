@@ -76,5 +76,91 @@
       </link>
     </model>
 
+    <!--
+      Flat, distinctly colored markers on the floor for calibrating the
+      overhead camera's position/orientation: with the robot in its default
+      pose, compare where these known (x, y) ground-truth points land in
+      /overhead_camera/image against where they should land given the
+      camera's height/tilt, and adjust the -x/-y/-z/-R/-P/-Y spawn arguments
+      in franka_with_overhead_camera.launch.py accordingly. Placed within the
+      camera's ground footprint at its default 0.797 m height and 60 degree
+      horizontal FOV (roughly a 0.92 m x 0.69 m rectangle centered below it),
+      clear of the robot base at the origin.
+    -->
+    <model name="calibration_marker_blue">
+      <static>true</static>
+      <pose>0.25 0.25 0.02 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.06 0.06 0.04</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.1 0.1 0.9 1</ambient>
+            <diffuse>0.1 0.1 0.9 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.06 0.06 0.04</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+
+    <model name="calibration_marker_green">
+      <static>true</static>
+      <pose>-0.25 0.25 0.02 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.06 0.06 0.04</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.1 0.9 0.1 1</ambient>
+            <diffuse>0.1 0.9 0.1 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.06 0.06 0.04</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+
+    <model name="calibration_marker_yellow">
+      <static>true</static>
+      <pose>0 -0.25 0.02 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.06 0.06 0.04</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.9 0.9 0.1 1</ambient>
+            <diffuse>0.9 0.9 0.1 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.06 0.06 0.04</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+
   </world>
 </sdf>
