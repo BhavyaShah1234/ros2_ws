@@ -18,7 +18,7 @@
 # because that stock world does not load the gz::sim::systems::Sensors
 # system plugin -- without it, camera/depth sensors advertise topics but
 # never actually publish frames. It also spawns the fixed overhead RGB-D
-# camera and bridges its topics.
+# camera and bridges its topics, and spawns the calibration floor markers.
 
 import os
 import xacro
@@ -55,6 +55,51 @@ def get_overhead_camera_pose():
         'pitch': cfg['pitch'],
         'yaw': cfg['yaw'],
     }
+
+
+def get_calibration_markers():
+    """Read the calibration marker list from config/calibration_markers.yaml.
+
+    See that file for what each field means and how to add/move/recolor
+    markers.
+    """
+    config_path = os.path.join(
+        get_package_share_directory('franka_overhead_camera'),
+        'config', 'calibration_markers.yaml')
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)['calibration_markers']
+
+
+def make_marker_sdf(marker):
+    """Build a minimal static colored-box model.sdf, inline, for one marker."""
+    size_x, size_y, size_z = marker['size']
+    r, g, b = marker['color']
+    return f'''<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="{marker['name']}">
+    <static>true</static>
+    <link name="link">
+      <visual name="visual">
+        <geometry>
+          <box>
+            <size>{size_x} {size_y} {size_z}</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>{r} {g} {b} 1</ambient>
+          <diffuse>{r} {g} {b} 1</diffuse>
+        </material>
+      </visual>
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>{size_x} {size_y} {size_z}</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>'''
 
 
 def get_robot_description(context: LaunchContext, robot_type, load_gripper, franka_hand):
@@ -209,6 +254,22 @@ def generate_launch_description():
         output='screen',
     )
 
+    spawn_calibration_markers = [
+        Node(
+            package='ros_gz_sim',
+            executable='create',
+            arguments=[
+                '-string', make_marker_sdf(marker),
+                '-name', marker['name'],
+                '-x', str(marker['x']),
+                '-y', str(marker['y']),
+                '-z', str(marker['z']),
+            ],
+            output='screen',
+        )
+        for marker in get_calibration_markers()
+    ]
+
     return LaunchDescription([
         load_gripper_launch_argument,
         franka_hand_launch_argument,
@@ -221,6 +282,7 @@ def generate_launch_description():
         bridge,
         spawn_overhead_camera,
         overhead_camera_bridge,
+        *spawn_calibration_markers,
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=spawn,
