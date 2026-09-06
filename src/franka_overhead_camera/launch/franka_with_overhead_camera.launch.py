@@ -18,10 +18,12 @@
 # because that stock world does not load the gz::sim::systems::Sensors
 # system plugin -- without it, camera/depth sensors advertise topics but
 # never actually publish frames. It also spawns the fixed overhead RGB-D
-# camera and bridges its topics, and spawns the calibration floor markers.
+# camera and bridges its topics, spawns the calibration floor markers and
+# maze, and attaches a laser rangefinder to the robot's flange.
 
 import os
 import xacro
+import xml.dom.minidom as minidom
 import yaml
 
 from ament_index_python.packages import get_package_share_directory
@@ -102,6 +104,147 @@ def make_marker_sdf(marker):
 </sdf>'''
 
 
+def make_maze_sdf():
+    """Build the maze as one static model, from config/maze_layout.yaml's
+    wall list mapped onto the square formed by config/calibration_markers.yaml's
+    3 markers (see both files for details). Returns None if fewer than 3
+    markers are configured (nothing to map the grid onto).
+    """
+    share_dir = get_package_share_directory('franka_overhead_camera')
+
+    with open(os.path.join(share_dir, 'config', 'maze_layout.yaml'), 'r') as f:
+        maze_cfg = yaml.safe_load(f)['maze']
+    with open(os.path.join(share_dir, 'config', 'calibration_markers.yaml'), 'r') as f:
+        markers = yaml.safe_load(f)['calibration_markers']
+
+    if len(markers) < 3:
+        return None
+
+    xs = [m['x'] for m in markers]
+    ys = [m['y'] for m in markers]
+    x_min, x_max = min(xs), max(xs)
+    y_min, y_max = min(ys), max(ys)
+
+    n = maze_cfg['cells_per_side']
+    thickness = maze_cfg['wall_thickness_m']
+    height = maze_cfg['wall_height_m']
+    cell_size_x = (x_max - x_min) / n
+    cell_size_y = (y_max - y_min) / n
+
+    def to_world(gx, gy):
+        return (x_min + gx * cell_size_x, y_min + gy * cell_size_y)
+
+    wall_elements = []
+    for (gx1, gy1), (gx2, gy2) in maze_cfg['segments_grid_units']:
+        wx1, wy1 = to_world(gx1, gy1)
+        wx2, wy2 = to_world(gx2, gy2)
+        cx, cy = (wx1 + wx2) / 2.0, (wy1 + wy2) / 2.0
+        length = ((wx2 - wx1) ** 2 + (wy2 - wy1) ** 2) ** 0.5
+        # Segments are axis-aligned in grid space and stay axis-aligned in
+        # world space, so orientation is a size choice, not a rotation.
+        if abs(wy2 - wy1) < 1e-9:
+            size_x, size_y = length, thickness
+        else:
+            size_x, size_y = thickness, length
+        wall_elements.append(f'''
+      <visual name="wall_visual_{len(wall_elements)}">
+        <pose>{cx} {cy} {height / 2.0} 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>{size_x} {size_y} {height}</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>0.6 0.6 0.6 1</ambient>
+          <diffuse>0.6 0.6 0.6 1</diffuse>
+        </material>
+      </visual>
+      <collision name="wall_collision_{len(wall_elements)}">
+        <pose>{cx} {cy} {height / 2.0} 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>{size_x} {size_y} {height}</size>
+          </box>
+        </geometry>
+      </collision>''')
+
+    return f'''<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="calibration_maze">
+    <static>true</static>
+    <link name="link">{''.join(wall_elements)}
+    </link>
+  </model>
+</sdf>'''
+
+
+def add_laser_to_urdf(doc, parent_link):
+    """Attach a laser rangefinder to `parent_link` (the robot's flange, e.g.
+    fr3_link8) directly in the xacro-generated URDF DOM: a small red
+    cylinder (the visible laser module) on a fixed joint, plus a
+    single-ray gpu_lidar sensor via a <gazebo> extension tag, pointing
+    along the flange's local +Z axis -- verified against
+    robots/fr3/kinematics.yaml's joint8 entry (xyz 0 0 0.107, zero
+    rotation), which means link8 shares link7's orientation and its
+    local +Z is the flange's outward/tool-pointing axis. A gz-sim sensor's
+    forward axis is local +X (as with the overhead camera), so the sensor
+    pose below pitches -90 degrees to align +X with the link's +Z.
+    """
+    extra_xml = f'''<root>
+      <link name="laser_link">
+        <visual>
+          <geometry>
+            <cylinder length="0.03" radius="0.005"/>
+          </geometry>
+          <material name="laser_red">
+            <color rgba="1 0 0 1"/>
+          </material>
+        </visual>
+      </link>
+      <joint name="laser_joint" type="fixed">
+        <parent link="{parent_link}"/>
+        <child link="laser_link"/>
+        <origin xyz="0 0 0.02" rpy="0 0 0"/>
+      </joint>
+      <gazebo reference="laser_link">
+        <sensor name="end_effector_laser" type="gpu_lidar">
+          <pose>0 0 0 0 -1.5707963 0</pose>
+          <topic>end_effector_laser</topic>
+          <update_rate>30</update_rate>
+          <lidar>
+            <scan>
+              <horizontal>
+                <samples>1</samples>
+                <resolution>1</resolution>
+                <min_angle>0</min_angle>
+                <max_angle>0</max_angle>
+              </horizontal>
+              <vertical>
+                <samples>1</samples>
+                <resolution>1</resolution>
+                <min_angle>0</min_angle>
+                <max_angle>0</max_angle>
+              </vertical>
+            </scan>
+            <range>
+              <min>0.02</min>
+              <max>5.0</max>
+              <resolution>0.001</resolution>
+            </range>
+          </lidar>
+          <alwaysOn>1</alwaysOn>
+          <visualize>true</visualize>
+        </sensor>
+      </gazebo>
+    </root>'''
+    extra_doc = minidom.parseString(extra_xml)
+    robot_elem = doc.getElementsByTagName('robot')[0]
+    for child in list(extra_doc.documentElement.childNodes):
+        if child.nodeType == child.ELEMENT_NODE:
+            robot_elem.appendChild(doc.importNode(child, deep=True))
+    return doc
+
+
 def get_robot_description(context: LaunchContext, robot_type, load_gripper, franka_hand):
     robot_type_str = context.perform_substitution(robot_type)
     load_gripper_str = context.perform_substitution(load_gripper)
@@ -124,6 +267,7 @@ def get_robot_description(context: LaunchContext, robot_type, load_gripper, fran
             'ee_id': franka_hand_str
         }
     )
+    add_laser_to_urdf(robot_description_config, parent_link=f'{robot_type_str}_link8')
     robot_description = {'robot_description': robot_description_config.toxml()}
 
     robot_state_publisher = Node(
@@ -270,6 +414,25 @@ def generate_launch_description():
         for marker in get_calibration_markers()
     ]
 
+    laser_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=[
+            '/end_effector_laser@sensor_msgs/msg/LaserScan@gz.msgs.LaserScan',
+        ],
+        output='screen',
+    )
+
+    maze_sdf = make_maze_sdf()
+    spawn_maze = [
+        Node(
+            package='ros_gz_sim',
+            executable='create',
+            arguments=['-string', maze_sdf, '-name', 'calibration_maze'],
+            output='screen',
+        )
+    ] if maze_sdf is not None else []
+
     return LaunchDescription([
         load_gripper_launch_argument,
         franka_hand_launch_argument,
@@ -283,6 +446,8 @@ def generate_launch_description():
         spawn_overhead_camera,
         overhead_camera_bridge,
         *spawn_calibration_markers,
+        *spawn_maze,
+        laser_bridge,
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=spawn,

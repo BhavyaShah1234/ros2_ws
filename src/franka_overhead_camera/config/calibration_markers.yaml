@@ -12,22 +12,22 @@
 # `ros2 launch`, no rebuild needed.
 calibration_markers:
   - name: calibration_marker_blue
-    x: 0.3
-    y: 0.5
+    x: 0.6
+    y: 0.3
     z: 0.02
     size: [0.06, 0.06, 0.04]
     color: [0.1, 0.1, 0.9]
 
   - name: calibration_marker_green
-    x: 0.3
-    y: -0.5
+    x: 0.6
+    y: -0.3
     z: 0.02
     size: [0.06, 0.06, 0.04]
     color: [0.1, 0.9, 0.1]
 
   - name: calibration_marker_yellow
-    x: 1.3
-    y: 0.5
+    x: 1.2
+    y: 0.3
     z: 0.02
     size: [0.06, 0.06, 0.04]
     color: [0.9, 0.9, 0.1]
