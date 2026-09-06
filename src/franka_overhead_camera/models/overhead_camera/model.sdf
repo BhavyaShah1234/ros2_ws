@@ -1,0 +1,60 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="overhead_camera">
+    <!--
+      Fixed overhead camera, centered above the robot base (world origin) and
+      pitched 90 degrees so its optical axis (local +X) points straight down
+      the world -Z axis at the floor.
+
+      Height derivation: forward kinematics of the FR3 in its default Gazebo
+      spawn pose (joint2=-45deg, joint4=-135deg, joint6=90deg, joint7=45deg,
+      the pose baked into franka_arm.ros2_control.xacro) puts the highest
+      point of the arm (the wrist cluster, links 5/6/7) at ~0.697 m above the
+      base. This camera sits 0.10 m above that: 0.697 + 0.10 = 0.797 m.
+    -->
+    <static>true</static>
+    <pose>0 0 0.797 0 1.5707963 0</pose>
+
+    <link name="link">
+      <inertial>
+        <mass>0.1</mass>
+        <inertia>
+          <ixx>0.0001</ixx>
+          <iyy>0.0001</iyy>
+          <izz>0.0001</izz>
+        </inertia>
+      </inertial>
+
+      <visual name="visual">
+        <geometry>
+          <box>
+            <size>0.06 0.06 0.04</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>0.8 0.1 0.1 1</ambient>
+          <diffuse>0.8 0.1 0.1 1</diffuse>
+          <specular>0.2 0.2 0.2 1</specular>
+        </material>
+      </visual>
+
+      <sensor name="overhead_rgbd_camera" type="rgbd_camera">
+        <camera>
+          <horizontal_fov>1.047</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+          </image>
+          <clip>
+            <near>0.05</near>
+            <far>10</far>
+          </clip>
+        </camera>
+        <always_on>1</always_on>
+        <update_rate>30</update_rate>
+        <visualize>true</visualize>
+        <topic>overhead_camera</topic>
+      </sensor>
+    </link>
+  </model>
+</sdf>
