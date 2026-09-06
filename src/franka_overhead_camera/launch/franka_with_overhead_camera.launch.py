@@ -155,8 +155,8 @@ def make_maze_sdf():
           </box>
         </geometry>
         <material>
-          <ambient>0.6 0.6 0.6 1</ambient>
-          <diffuse>0.6 0.6 0.6 1</diffuse>
+          <ambient>0.1 0.7 0.1 1</ambient>
+          <diffuse>0.1 0.7 0.1 1</diffuse>
         </material>
       </visual>
       <collision name="wall_collision_{len(wall_elements)}">
@@ -189,12 +189,19 @@ def add_laser_to_urdf(doc, parent_link):
     local +Z is the flange's outward/tool-pointing axis. A gz-sim sensor's
     forward axis is local +X (as with the overhead camera), so the sensor
     pose below pitches -90 degrees to align +X with the link's +Z.
+
+    The rod is deliberately long (ROD_LENGTH): the sensor/emission point
+    sits at its tip, one full rod length out from the flange, so the arm
+    can keep its flange well clear of the maze walls (only 0.03 m tall)
+    while the tip still reaches down among them.
     """
+    ROD_LENGTH = 0.12
     extra_xml = f'''<root>
       <link name="laser_link">
         <visual>
+          <origin xyz="0 0 {-ROD_LENGTH / 2.0}" rpy="0 0 0"/>
           <geometry>
-            <cylinder length="0.03" radius="0.005"/>
+            <cylinder length="{ROD_LENGTH}" radius="0.005"/>
           </geometry>
           <material name="laser_red">
             <color rgba="1 0 0 1"/>
@@ -204,7 +211,7 @@ def add_laser_to_urdf(doc, parent_link):
       <joint name="laser_joint" type="fixed">
         <parent link="{parent_link}"/>
         <child link="laser_link"/>
-        <origin xyz="0 0 0.02" rpy="0 0 0"/>
+        <origin xyz="0 0 {ROD_LENGTH}" rpy="0 0 0"/>
       </joint>
       <gazebo reference="laser_link">
         <sensor name="end_effector_laser" type="gpu_lidar">
@@ -398,21 +405,27 @@ def generate_launch_description():
         output='screen',
     )
 
-    spawn_calibration_markers = [
-        Node(
-            package='ros_gz_sim',
-            executable='create',
-            arguments=[
-                '-string', make_marker_sdf(marker),
-                '-name', marker['name'],
-                '-x', str(marker['x']),
-                '-y', str(marker['y']),
-                '-z', str(marker['z']),
-            ],
-            output='screen',
-        )
-        for marker in get_calibration_markers()
-    ]
+    # Calibration markers: job done (used to set up the camera pose and to
+    # anchor the maze's position/orientation -- calibration_markers.yaml is
+    # still read for that in make_maze_sdf() above). Spawning the physical
+    # blocks themselves is no longer needed, so it's commented out rather
+    # than removed in case recalibration is ever needed again.
+    # spawn_calibration_markers = [
+    #     Node(
+    #         package='ros_gz_sim',
+    #         executable='create',
+    #         arguments=[
+    #             '-string', make_marker_sdf(marker),
+    #             '-name', marker['name'],
+    #             '-x', str(marker['x']),
+    #             '-y', str(marker['y']),
+    #             '-z', str(marker['z']),
+    #         ],
+    #         output='screen',
+    #     )
+    #     for marker in get_calibration_markers()
+    # ]
+    spawn_calibration_markers = []
 
     laser_bridge = Node(
         package='ros_gz_bridge',
