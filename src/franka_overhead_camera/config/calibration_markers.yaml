@@ -1,0 +1,33 @@
+# Floor markers for calibrating the overhead camera's position/orientation
+# (see franka_with_overhead_camera.launch.py, which spawns one flat colored
+# box per entry below): with the robot in its default pose, compare where
+# these known (x, y) ground-truth points land in /overhead_camera/image
+# against where they should land, and adjust config/overhead_camera.yaml
+# accordingly.
+#
+# Robot is spawned at the world origin with no rotation, so "in front" of it
+# is +x. Currently 3 of the 4 corners of a 1 m x 1 m square in front of the
+# robot base (4th corner, at (1.3, -0.5), left empty). x/y/z and size are in
+# meters; color is [r, g, b], each 0-1. Edits here take effect on the next
+# `ros2 launch`, no rebuild needed.
+calibration_markers:
+  - name: calibration_marker_blue
+    x: 0.3
+    y: 0.5
+    z: 0.02
+    size: [0.06, 0.06, 0.04]
+    color: [0.1, 0.1, 0.9]
+
+  - name: calibration_marker_green
+    x: 0.3
+    y: -0.5
+    z: 0.02
+    size: [0.06, 0.06, 0.04]
+    color: [0.1, 0.9, 0.1]
+
+  - name: calibration_marker_yellow
+    x: 1.3
+    y: 0.5
+    z: 0.02
+    size: [0.06, 0.06, 0.04]
+    color: [0.9, 0.9, 0.1]
