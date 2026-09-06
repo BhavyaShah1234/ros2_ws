@@ -22,6 +22,7 @@
 
 import os
 import xacro
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -33,13 +34,27 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-# Highest point of the FR3 arm (the wrist cluster) in its default Gazebo spawn
-# pose, measured via forward kinematics of franka_arm.ros2_control.xacro's
-# baked-in initial joint values. Kept in sync with the comment and <pose> in
-# models/overhead_camera/model.sdf.
-ROBOT_HEIGHT_M = 0.697
-CAMERA_CLEARANCE_M = 0.10
-CAMERA_HEIGHT_M = ROBOT_HEIGHT_M + CAMERA_CLEARANCE_M
+
+def get_overhead_camera_pose():
+    """Read the camera's spawn pose from config/overhead_camera.yaml.
+
+    See that file for what each field means and why editing it (rather than
+    this launch file, or the <pose> in model.sdf) is the right place to
+    adjust the camera's position/orientation.
+    """
+    config_path = os.path.join(
+        get_package_share_directory('franka_overhead_camera'),
+        'config', 'overhead_camera.yaml')
+    with open(config_path, 'r') as f:
+        cfg = yaml.safe_load(f)['overhead_camera']
+    return {
+        'x': cfg['x'],
+        'y': cfg['y'],
+        'z': cfg['robot_height_m'] + cfg['clearance_m'],
+        'roll': cfg['roll'],
+        'pitch': cfg['pitch'],
+        'yaw': cfg['yaw'],
+    }
 
 
 def get_robot_description(context: LaunchContext, robot_type, load_gripper, franka_hand):
@@ -164,14 +179,20 @@ def generate_launch_description():
         get_package_share_directory('franka_overhead_camera'),
         'models', 'overhead_camera', 'model.sdf')
 
+    overhead_camera_pose = get_overhead_camera_pose()
+
     spawn_overhead_camera = Node(
         package='ros_gz_sim',
         executable='create',
         arguments=[
             '-file', overhead_camera_model,
             '-name', 'overhead_camera',
-            '-x', '0', '-y', '0', '-z', str(CAMERA_HEIGHT_M),
-            '-R', '0', '-P', '1.5707963', '-Y', '0',
+            '-x', str(overhead_camera_pose['x']),
+            '-y', str(overhead_camera_pose['y']),
+            '-z', str(overhead_camera_pose['z']),
+            '-R', str(overhead_camera_pose['roll']),
+            '-P', str(overhead_camera_pose['pitch']),
+            '-Y', str(overhead_camera_pose['yaw']),
         ],
         output='screen',
     )
