@@ -264,10 +264,20 @@ def redirect_controller_params(doc, package, filename):
     the same minidom DOM already built by xacro.process_file()) to point at
     franka_overhead_camera's own controllers YAML instead, which adds
     joint_trajectory_controller.
+
+    Note: `xacro.process_file()` already resolves `$(find pkg)` itself
+    (verified: its output contains a real absolute path, not the literal
+    `$(find ...)` text) -- by the time this function runs, that syntax has
+    already had its one chance to be resolved and won't be evaluated again
+    downstream. So this must substitute a real absolute path directly
+    (via get_package_share_directory), not another `$(find pkg)` string --
+    confirmed live: writing `$(find pkg)/...` here reaches rcl's
+    --params-file parser as a literal unresolved string and fails to open.
     """
+    new_path = os.path.join(get_package_share_directory(package), 'config', filename)
     for elem in doc.getElementsByTagName('parameters'):
         if elem.firstChild and 'franka_gazebo_controllers.yaml' in elem.firstChild.data:
-            elem.firstChild.data = f'$(find {package})/config/{filename}'
+            elem.firstChild.data = new_path
 
 
 def get_robot_description(context: LaunchContext, robot_type, load_gripper, franka_hand):
