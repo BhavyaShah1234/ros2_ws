@@ -405,6 +405,30 @@ def generate_launch_description():
         output='screen',
     )
 
+    # The camera is a standalone Gazebo model spawned outside the robot's
+    # URDF, so robot_state_publisher never learns about it and nothing
+    # publishes its pose to /tf (verified: neither /tf nor /tf_static carry
+    # an "overhead_camera" frame without this). Since it's fixed, a static
+    # transform using the exact pose it was spawned with is all that's
+    # needed. Child frame matches the sensor data's actual header.frame_id
+    # (verified against a live /overhead_camera/image message) so consumers
+    # can look up e.g. world -> msg.header.frame_id directly.
+    overhead_camera_tf = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=[
+            '--x', str(overhead_camera_pose['x']),
+            '--y', str(overhead_camera_pose['y']),
+            '--z', str(overhead_camera_pose['z']),
+            '--roll', str(overhead_camera_pose['roll']),
+            '--pitch', str(overhead_camera_pose['pitch']),
+            '--yaw', str(overhead_camera_pose['yaw']),
+            '--frame-id', 'world',
+            '--child-frame-id', 'overhead_camera::link::overhead_rgbd_camera',
+        ],
+        output='screen',
+    )
+
     # Calibration markers: job done (used to set up the camera pose and to
     # anchor the maze's position/orientation -- calibration_markers.yaml is
     # still read for that in make_maze_sdf() above). Spawning the physical
@@ -458,6 +482,7 @@ def generate_launch_description():
         bridge,
         spawn_overhead_camera,
         overhead_camera_bridge,
+        overhead_camera_tf,
         *spawn_calibration_markers,
         *spawn_maze,
         laser_bridge,
