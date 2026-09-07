@@ -252,6 +252,24 @@ def add_laser_to_urdf(doc, parent_link):
     return doc
 
 
+def redirect_controller_params(doc, package, filename):
+    """Redirect the ros2_control plugin's <parameters> path to a different
+    package/file.
+
+    franka_description's franka_arm.ros2_control.xacro hardcodes
+    <parameters>$(find franka_gazebo_bringup)/config/franka_gazebo_controllers.yaml</parameters>
+    inside the <gazebo><plugin> block -- that vendored file only defines the
+    *_example_controllers, none of which accept external commands. Rather
+    than edit the submodule, this rewrites that one text node (found via
+    the same minidom DOM already built by xacro.process_file()) to point at
+    franka_overhead_camera's own controllers YAML instead, which adds
+    joint_trajectory_controller.
+    """
+    for elem in doc.getElementsByTagName('parameters'):
+        if elem.firstChild and 'franka_gazebo_controllers.yaml' in elem.firstChild.data:
+            elem.firstChild.data = f'$(find {package})/config/{filename}'
+
+
 def get_robot_description(context: LaunchContext, robot_type, load_gripper, franka_hand):
     robot_type_str = context.perform_substitution(robot_type)
     load_gripper_str = context.perform_substitution(load_gripper)
@@ -275,6 +293,10 @@ def get_robot_description(context: LaunchContext, robot_type, load_gripper, fran
         }
     )
     add_laser_to_urdf(robot_description_config, parent_link=f'{robot_type_str}_link8')
+    redirect_controller_params(
+        robot_description_config,
+        package='franka_overhead_camera',
+        filename='franka_gazebo_controllers.yaml')
     robot_description = {'robot_description': robot_description_config.toxml()}
 
     robot_state_publisher = Node(
@@ -365,9 +387,9 @@ def generate_launch_description():
         output='screen'
     )
 
-    load_joint_position_example_controller = ExecuteProcess(
+    load_joint_trajectory_controller = ExecuteProcess(
         cmd=['ros2', 'control', 'load_controller', '--set-state', 'active',
-             'joint_position_example_controller'],
+             'joint_trajectory_controller'],
         output='screen'
     )
 
@@ -495,7 +517,7 @@ def generate_launch_description():
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=load_joint_state_broadcaster,
-                on_exit=[load_joint_position_example_controller],
+                on_exit=[load_joint_trajectory_controller],
             )
         ),
         Node(
