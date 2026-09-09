@@ -18,8 +18,8 @@
 # because that stock world does not load the gz::sim::systems::Sensors
 # system plugin -- without it, camera/depth sensors advertise topics but
 # never actually publish frames. It also spawns the fixed overhead RGB-D
-# camera and bridges its topics, spawns the calibration floor markers and
-# maze, and attaches a laser rangefinder to the robot's flange.
+# camera and bridges its topics, spawns the maze, and attaches a laser
+# rangefinder to the robot's flange.
 
 import os
 import xacro
@@ -38,15 +38,15 @@ from launch_ros.actions import Node
 
 
 def get_overhead_camera_pose():
-    """Read the camera's spawn pose from config/overhead_camera.yaml.
+    """Read the camera's spawn pose from config/camera_and_maze.yaml.
 
     See that file for what each field means and why editing it (rather than
     this launch file, or the <pose> in model.sdf) is the right place to
     adjust the camera's position/orientation.
     """
     config_path = os.path.join(
-        get_package_share_directory('franka_overhead_camera'),
-        'config', 'overhead_camera.yaml')
+        get_package_share_directory('maze_solver'),
+        'config', 'camera_and_maze.yaml')
     with open(config_path, 'r') as f:
         cfg = yaml.safe_load(f)['overhead_camera']
     return {
@@ -59,69 +59,35 @@ def get_overhead_camera_pose():
     }
 
 
-def get_calibration_markers():
-    """Read the calibration marker list from config/calibration_markers.yaml.
+def get_maze_corners():
+    """Read the maze's corner points from config/camera_and_maze.yaml.
 
-    See that file for what each field means and how to add/move/recolor
-    markers.
+    See that file for what each field means and how to add/move corners.
     """
     config_path = os.path.join(
-        get_package_share_directory('franka_overhead_camera'),
-        'config', 'calibration_markers.yaml')
+        get_package_share_directory('maze_solver'),
+        'config', 'camera_and_maze.yaml')
     with open(config_path, 'r') as f:
-        return yaml.safe_load(f)['calibration_markers']
-
-
-def make_marker_sdf(marker):
-    """Build a minimal static colored-box model.sdf, inline, for one marker."""
-    size_x, size_y, size_z = marker['size']
-    r, g, b = marker['color']
-    return f'''<?xml version="1.0" ?>
-<sdf version="1.9">
-  <model name="{marker['name']}">
-    <static>true</static>
-    <link name="link">
-      <visual name="visual">
-        <geometry>
-          <box>
-            <size>{size_x} {size_y} {size_z}</size>
-          </box>
-        </geometry>
-        <material>
-          <ambient>{r} {g} {b} 1</ambient>
-          <diffuse>{r} {g} {b} 1</diffuse>
-        </material>
-      </visual>
-      <collision name="collision">
-        <geometry>
-          <box>
-            <size>{size_x} {size_y} {size_z}</size>
-          </box>
-        </geometry>
-      </collision>
-    </link>
-  </model>
-</sdf>'''
+        return yaml.safe_load(f)['maze']
 
 
 def make_maze_sdf():
     """Build the maze as one static model, from config/maze_layout.yaml's
-    wall list mapped onto the square formed by config/calibration_markers.yaml's
-    3 markers (see both files for details). Returns None if fewer than 3
-    markers are configured (nothing to map the grid onto).
+    wall list mapped onto the square formed by config/camera_and_maze.yaml's
+    3 maze corner points (see both files for details). Returns None if
+    fewer than 3 corners are configured (nothing to map the grid onto).
     """
-    share_dir = get_package_share_directory('franka_overhead_camera')
+    share_dir = get_package_share_directory('maze_solver')
 
     with open(os.path.join(share_dir, 'config', 'maze_layout.yaml'), 'r') as f:
         maze_cfg = yaml.safe_load(f)['maze']
-    with open(os.path.join(share_dir, 'config', 'calibration_markers.yaml'), 'r') as f:
-        markers = yaml.safe_load(f)['calibration_markers']
+    corners = get_maze_corners()
 
-    if len(markers) < 3:
+    if len(corners) < 3:
         return None
 
-    xs = [m['x'] for m in markers]
-    ys = [m['y'] for m in markers]
+    xs = [c['x'] for c in corners.values()]
+    ys = [c['y'] for c in corners.values()]
     x_min, x_max = min(xs), max(xs)
     y_min, y_max = min(ys), max(ys)
 
@@ -262,7 +228,7 @@ def redirect_controller_params(doc, package, filename):
     *_example_controllers, none of which accept external commands. Rather
     than edit the submodule, this rewrites that one text node (found via
     the same minidom DOM already built by xacro.process_file()) to point at
-    franka_overhead_camera's own controllers YAML instead, which adds
+    maze_solver's own controllers YAML instead, which adds
     joint_trajectory_controller.
 
     Note: `xacro.process_file()` already resolves `$(find pkg)` itself
@@ -305,7 +271,7 @@ def get_robot_description(context: LaunchContext, robot_type, load_gripper, fran
     add_laser_to_urdf(robot_description_config, parent_link=f'{robot_type_str}_link8')
     redirect_controller_params(
         robot_description_config,
-        package='franka_overhead_camera',
+        package='maze_solver',
         filename='franka_gazebo_controllers.yaml')
     robot_description = {'robot_description': robot_description_config.toxml()}
 
@@ -359,7 +325,7 @@ def generate_launch_description():
         get_package_share_directory('franka_description'))
     pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
     world_file = os.path.join(
-        get_package_share_directory('franka_overhead_camera'),
+        get_package_share_directory('maze_solver'),
         'worlds', 'empty_with_sensors.sdf')
     gazebo_world = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -404,7 +370,7 @@ def generate_launch_description():
     )
 
     overhead_camera_model = os.path.join(
-        get_package_share_directory('franka_overhead_camera'),
+        get_package_share_directory('maze_solver'),
         'models', 'overhead_camera', 'model.sdf')
 
     overhead_camera_pose = get_overhead_camera_pose()
@@ -461,27 +427,10 @@ def generate_launch_description():
         output='screen',
     )
 
-    # Calibration markers: job done (used to set up the camera pose and to
-    # anchor the maze's position/orientation -- calibration_markers.yaml is
-    # still read for that in make_maze_sdf() above). Spawning the physical
-    # blocks themselves is no longer needed, so it's commented out rather
-    # than removed in case recalibration is ever needed again.
-    # spawn_calibration_markers = [
-    #     Node(
-    #         package='ros_gz_sim',
-    #         executable='create',
-    #         arguments=[
-    #             '-string', make_marker_sdf(marker),
-    #             '-name', marker['name'],
-    #             '-x', str(marker['x']),
-    #             '-y', str(marker['y']),
-    #             '-z', str(marker['z']),
-    #         ],
-    #         output='screen',
-    #     )
-    #     for marker in get_calibration_markers()
-    # ]
-    spawn_calibration_markers = []
+    # The maze's corner points (config/camera_and_maze.yaml's maze section)
+    # are calibration reference points only -- used to position/scale the
+    # maze in make_maze_sdf() above -- not entities of their own, so
+    # there's nothing to spawn for them.
 
     laser_bridge = Node(
         package='ros_gz_bridge',
@@ -515,7 +464,6 @@ def generate_launch_description():
         spawn_overhead_camera,
         overhead_camera_bridge,
         overhead_camera_tf,
-        *spawn_calibration_markers,
         *spawn_maze,
         laser_bridge,
         RegisterEventHandler(

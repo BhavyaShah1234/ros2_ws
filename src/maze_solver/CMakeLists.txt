@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(franka_overhead_camera)
+project(maze_solver)
 
 find_package(ament_cmake REQUIRED)
 

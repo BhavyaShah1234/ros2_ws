@@ -21,7 +21,7 @@
 #   3. The robot's reported joint positions (/joint_states) actually moved
 #      to the commanded target, within tolerance.
 #
-# Run with: ros2 run franka_overhead_camera verify_controller.py
+# Run with: ros2 run maze_solver verify_controller.py
 # (the simulation must already be running.)
 
 import sys

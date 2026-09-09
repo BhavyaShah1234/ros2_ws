@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>franka_overhead_camera</name>
+  <name>maze_solver</name>
   <version>0.1.0</version>
-  <description>Fixed overhead RGB-D camera model and launch files for the Franka Gazebo simulation</description>
+  <description>Franka FR3 maze-solving simulation: overhead camera, maze, laser end-effector, and solver nodes</description>
   <maintainer email="bshah43@asu.edu">Bhavya Shah</maintainer>
   <license>Apache 2.0</license>
 

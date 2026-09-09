@@ -6,19 +6,20 @@
 #
 # Wall segments are stored in grid units (0..cells_per_side), NOT meters:
 # franka_with_overhead_camera.launch.py maps this grid onto the square formed
-# by the 3 calibration markers in calibration_markers.yaml at launch time
-# (grid x in [0, cells_per_side] -> world x in [min marker x, max marker x],
-# same for y), so moving the blocks moves and rescales the maze with them.
+# by the 3 corner points in camera_and_maze.yaml's maze section at launch
+# time (grid x in [0, cells_per_side] -> world x in [min corner x, max
+# corner x], same for y), so moving those points moves and rescales the
+# maze with them.
 #
 # Entrance and exit are always on the pair of edges at y=y_min and y=y_max
 # (never y=x_min/x_max), matching mazegenerator.net's "Starts at: Top" +
 # opposite-edge exit convention: cell (0,0)'s boundary wall at y=y_min and
 # cell (cells_per_side-1, cells_per_side-1)'s boundary wall at y=y_max are
 # always the two forced open, regardless of the maze's random internal
-# passages. With calibration_markers.yaml's blue/green/yellow markers as
-# (x_min,y_max), (x_min,y_min), (x_max,y_max): entrance is at the green
-# marker's corner (min x, min y); exit is at the yellow marker's corner
-# (max x, max y) -- not the empty 4th corner (max x, min y).
+# passages. With camera_and_maze.yaml's top_left/bottom_left/top_right
+# corners as (x_min,y_max), (x_min,y_min), (x_max,y_max): entrance is at
+# bottom_left's corner (min x, min y); exit is at top_right's corner
+# (max x, max y) -- not the empty 4th corner, bottom_right (max x, min y).
 maze:
   cells_per_side: 10
   wall_thickness_m: 0.006

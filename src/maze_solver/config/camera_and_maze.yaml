@@ -1,0 +1,59 @@
+# Overhead camera pose + maze corner calibration -- merged into one file
+# since both configure different aspects of the same overhead
+# camera/maze setup (see franka_with_overhead_camera.launch.py, which reads
+# both sections at launch time).
+
+# Pose used to spawn the overhead camera. Applied via `ros_gz_sim create`'s
+# -x/-y/-z/-R/-P/-Y flags, which unconditionally override any <pose> in
+# models/overhead_camera/model.sdf -- so this file, not the SDF, is what
+# actually controls where the camera ends up. Edits here take effect on the
+# next `ros2 launch`, no rebuild needed.
+overhead_camera:
+  # Horizontal position, in meters, in the world frame (robot base = origin).
+  x: 0.8
+  y: 0.0
+
+  # Height, in meters, is robot_height_m + clearance_m:
+  #  - robot_height_m: highest point of the FR3 arm (the wrist cluster) in
+  #    its default Gazebo spawn pose, from forward kinematics of
+  #    franka_arm.ros2_control.xacro's baked-in initial joint values.
+  #    Shouldn't need to change unless the robot's default pose does.
+  #  - clearance_m: how far above that the camera sits. This is the knob to
+  #    turn to change the camera's height/ground footprint.
+  robot_height_m: 0.697
+  clearance_m: -0.10
+
+  # Orientation, in radians (roll, pitch, yaw). pitch = pi/2 (1.5707963)
+  # points the camera's optical axis (local +X) straight down at the floor.
+  # Change yaw to rotate the image; change roll/pitch away from this value
+  # to tilt the view off-vertical.
+  roll: 3.14159
+  pitch: 2.0944
+  yaw: 0.0
+
+# Corners of the square the maze (config/maze_layout.yaml) is rendered onto
+# at launch time (see make_maze_sdf() in franka_with_overhead_camera.launch.py):
+# grid x in [0, cells_per_side] -> world x in [min corner x, max corner x],
+# same for y -- so moving these points moves and rescales the maze with
+# them. Each point is a real-world (x, y, z) location, in meters, in the
+# world frame (robot base = origin; robot faces +x).
+#
+# Only 3 of the square's 4 corners are defined below (bottom_right is left
+# out) -- 3 points are all make_maze_sdf() needs to derive the square's
+# bounds, and the robot's spawn position is such that the 4th corner would
+# sit outside the arm's comfortable reach.
+maze:
+  top_left:
+    x: 0.1
+    y: 0.3
+    z: 0.02
+
+  top_right:
+    x: 0.7
+    y: 0.3
+    z: 0.02
+
+  bottom_left:
+    x: 0.1
+    y: -0.3
+    z: 0.02
