@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+from maze_solver.maze_digitizer import main
+
+if __name__ == '__main__':
+    main()
