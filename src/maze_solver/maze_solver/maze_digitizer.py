@@ -1,5 +1,7 @@
 import cv2
 import rclpy as r
+import yaml
+from ament_index_python.packages import get_package_share_directory
 from cv_bridge import CvBridge
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
@@ -8,11 +10,14 @@ from nav_msgs.msg import OccupancyGrid
 
 class MazeDigitizer(Node):
     def __init__(self):
-        super(MazeDigitizer, self).__init__(node_name='maze_digitizer')
+        config_path = get_package_share_directory('maze_solver') + '/config/ros_interfaces.yaml'
+        with open(config_path, 'r') as file:
+            config = yaml.safe_load(file)
+        super(MazeDigitizer, self).__init__(node_name=config['nodes']['maze_digitizer'])
         self.bridge = CvBridge()
-        self.create_subscription(Image, '/overhead_camera/image', self.callback, 10)
+        self.create_subscription(Image, config['topics']['overhead_camera_image'], self.callback, 10)
         grid_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        self.grid_publisher = self.create_publisher(OccupancyGrid, '/maze_occupancy_grid', grid_qos)
+        self.grid_publisher = self.create_publisher(OccupancyGrid, config['topics']['maze_occupancy_grid'], grid_qos)
 
     def callback(self, image_message):
         image = self.decode_image(image_message)

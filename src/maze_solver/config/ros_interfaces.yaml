@@ -1,0 +1,10 @@
+nodes:
+  maze_digitizer: maze_digitizer
+
+topics:
+  overhead_camera_image: /overhead_camera/image
+  maze_occupancy_grid: /maze_occupancy_grid
+
+services: {}
+
+actions: {}
