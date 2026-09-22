@@ -1,5 +1,6 @@
-import numpy as np
+import cv2
 import rclpy as r
+from cv_bridge import CvBridge
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from sensor_msgs.msg import Image
@@ -8,6 +9,7 @@ from nav_msgs.msg import OccupancyGrid
 class MazeDigitizer(Node):
     def __init__(self):
         super(MazeDigitizer, self).__init__(node_name='maze_digitizer')
+        self.bridge = CvBridge()
         self.create_subscription(Image, '/overhead_camera/image', self.callback, 10)
         grid_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.grid_publisher = self.create_publisher(OccupancyGrid, '/maze_occupancy_grid', grid_qos)
@@ -21,16 +23,14 @@ class MazeDigitizer(Node):
             self.grid_publisher.publish(grid_message)
 
     def decode_image(self, image_message):
-        array = np.frombuffer(image_message.data, dtype=np.uint8)
+        image = self.bridge.imgmsg_to_cv2(image_message)
         if image_message.encoding == 'rgb8':
-            return array.reshape(image_message.height, image_message.width, 3)[:, :, ::-1]
-        if image_message.encoding == 'bgr8':
-            return array.reshape(image_message.height, image_message.width, 3).copy()
+            return cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         if image_message.encoding == 'rgba8':
-            return array.reshape(image_message.height, image_message.width, 4)[:, :, [2, 1, 0]]
+            return cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
         if image_message.encoding == 'bgra8':
-            return array.reshape(image_message.height, image_message.width, 4)[:, :, :3].copy()
-        raise ValueError(f'Unsupported image encoding: {image_message.encoding}')
+            return cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+        return image
 
     def digitize_maze(self, image):
         raise NotImplementedError
