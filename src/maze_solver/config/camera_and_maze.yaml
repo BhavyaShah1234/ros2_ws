@@ -10,7 +10,10 @@
 # next `ros2 launch`, no rebuild needed.
 overhead_camera:
   # Horizontal position, in meters, in the world frame (robot base = origin).
-  x: 0.8
+  # x is centered over the maze's x-span (corners span x in [0.1, 0.7], so
+  # midpoint 0.4) -- previously 0.8, well past the maze's far edge, which is
+  # why the camera had to be tilted just to see the maze at all.
+  x: 0.4
   y: 0.0
 
   # Height, in meters, is robot_height_m + clearance_m:
@@ -19,16 +22,25 @@ overhead_camera:
   #    franka_arm.ros2_control.xacro's baked-in initial joint values.
   #    Shouldn't need to change unless the robot's default pose does.
   #  - clearance_m: how far above that the camera sits. This is the knob to
-  #    turn to change the camera's height/ground footprint.
+  #    turn to change the camera's height/ground footprint. At pitch =
+  #    straight down, the model.sdf's 640x480 sensor with horizontal_fov
+  #    1.047 rad has a narrower *vertical* FOV (~46.8 deg, from the 4:3
+  #    aspect ratio) than horizontal -- that's the binding constraint for
+  #    fitting the maze's 0.6 x 0.6 m square in frame. Minimum height to
+  #    fit it at all is ~0.69 m; 0.20 clearance (~0.90 m total) leaves
+  #    margin around the edges.
   robot_height_m: 0.697
-  clearance_m: -0.10
+  clearance_m: 0.20
 
   # Orientation, in radians (roll, pitch, yaw). pitch = pi/2 (1.5707963)
-  # points the camera's optical axis (local +X) straight down at the floor.
+  # points the camera's optical axis (local +X) straight down at the floor
+  # -- true here now (previously set to 2.0944, an oblique tilt, which
+  # combined with the off-center x above to see the maze at all, at the
+  # cost of perspective distortion and near-side occlusion of far cells).
   # Change yaw to rotate the image; change roll/pitch away from this value
   # to tilt the view off-vertical.
   roll: 3.14159
-  pitch: 2.0944
+  pitch: 1.5707963
   yaw: 0.0
 
 # Corners of the square the maze (config/maze_layout.yaml) is rendered onto
