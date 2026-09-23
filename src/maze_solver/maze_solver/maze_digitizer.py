@@ -17,7 +17,7 @@ class MazeDigitizer(Node):
     def __init__(self):
         super(MazeDigitizer, self).__init__(node_name='maze_digitizer')
         self.bridge = CvBridge()
-        self.create_subscription(Image, 'overhead_camera_image', self.callback, 10)
+        self.create_subscription(Image, '/overhead_camera/image', self.callback, 10)
         grid_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.grid_publisher = self.create_publisher(OccupancyGrid, 'maze_occupancy_grid', grid_qos)
         self.get_logger().info('maze_digitizer started')
@@ -36,7 +36,7 @@ class MazeDigitizer(Node):
         cv2.imwrite("image.png", image)
         hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv_image, (35, 40, 40), (85, 255, 255))
-        mask = cv2.flip(mask, 0)
+        mask = cv2.rotate(mask, cv2.ROTATE_90_COUNTERCLOCKWISE)
         cv2.imwrite("maze.png", mask)
         grid_message = OccupancyGrid()
         grid_message.info.resolution = 1.0
