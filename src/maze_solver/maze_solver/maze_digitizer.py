@@ -1,6 +1,7 @@
 import contextlib
 import io
 import os
+import traceback
 import cv2
 import rclpy as r
 import yaml
@@ -21,6 +22,7 @@ class MazeDigitizer(Node):
         self.create_subscription(Image, config['topics']['overhead_camera_image'], self.callback, 10)
         grid_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.grid_publisher = self.create_publisher(OccupancyGrid, config['topics']['maze_occupancy_grid'], grid_qos)
+        self.get_logger().info('maze_digitizer started')
 
     def decode_image(self, image_message):
         image = self.bridge.imgmsg_to_cv2(image_message)
@@ -33,9 +35,11 @@ class MazeDigitizer(Node):
         return image
 
     def digitize_maze(self, image):
+        cv2.imwrite("image.png", image)
         hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv_image, (35, 40, 40), (85, 255, 255))
         mask = cv2.flip(mask, 0)
+        cv2.imwrite("maze.png", mask)
         grid_message = OccupancyGrid()
         grid_message.info.resolution = 1.0
         grid_message.info.width = mask.shape[1]
@@ -45,12 +49,16 @@ class MazeDigitizer(Node):
         return grid_message
 
     def callback(self, image_message):
-        image = self.decode_image(image_message)
-        grid_message = self.digitize_maze(image)
-        if grid_message is not None:
-            grid_message.header.stamp = image_message.header.stamp
-            grid_message.header.frame_id = image_message.header.frame_id
-            self.grid_publisher.publish(grid_message)
+        try:
+            image = self.decode_image(image_message)
+            grid_message = self.digitize_maze(image)
+            if grid_message is not None:
+                grid_message.header.stamp = image_message.header.stamp
+                grid_message.header.frame_id = image_message.header.frame_id
+                self.grid_publisher.publish(grid_message)
+                self.get_logger().info(f'published occupancy grid: {grid_message.info.width}x{grid_message.info.height}')
+        except Exception:
+            self.get_logger().error(traceback.format_exc())
 
 def main(args=None):
     r.init(args=args)
