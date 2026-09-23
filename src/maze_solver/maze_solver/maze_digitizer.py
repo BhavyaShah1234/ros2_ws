@@ -1,9 +1,12 @@
+import contextlib
+import io
 import os
 import cv2
 import rclpy as r
 import yaml
 from ament_index_python.packages import get_package_share_directory
-from cv_bridge import CvBridge
+with contextlib.redirect_stderr(io.StringIO()):
+    from cv_bridge import CvBridge
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from sensor_msgs.msg import Image
