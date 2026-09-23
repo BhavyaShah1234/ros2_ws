@@ -45,7 +45,7 @@ def get_overhead_camera_pose():
     adjust the camera's position/orientation.
     """
     config_path = os.path.join(
-        get_package_share_directory('maze_solver'),
+        get_package_share_directory('maze_environment'),
         'config', 'camera_and_maze.yaml')
     with open(config_path, 'r') as f:
         cfg = yaml.safe_load(f)['overhead_camera']
@@ -65,7 +65,7 @@ def get_maze_corners():
     See that file for what each field means and how to add/move corners.
     """
     config_path = os.path.join(
-        get_package_share_directory('maze_solver'),
+        get_package_share_directory('maze_environment'),
         'config', 'camera_and_maze.yaml')
     with open(config_path, 'r') as f:
         return yaml.safe_load(f)['maze']
@@ -77,7 +77,7 @@ def make_maze_sdf():
     3 maze corner points (see both files for details). Returns None if
     fewer than 3 corners are configured (nothing to map the grid onto).
     """
-    share_dir = get_package_share_directory('maze_solver')
+    share_dir = get_package_share_directory('maze_environment')
 
     with open(os.path.join(share_dir, 'config', 'maze_layout.yaml'), 'r') as f:
         maze_cfg = yaml.safe_load(f)['maze']
@@ -228,7 +228,7 @@ def redirect_controller_params(doc, package, filename):
     *_example_controllers, none of which accept external commands. Rather
     than edit the submodule, this rewrites that one text node (found via
     the same minidom DOM already built by xacro.process_file()) to point at
-    maze_solver's own controllers YAML instead, which adds
+    maze_environment's own controllers YAML instead, which adds
     joint_trajectory_controller.
 
     Note: `xacro.process_file()` already resolves `$(find pkg)` itself
@@ -271,7 +271,7 @@ def get_robot_description(context: LaunchContext, robot_type, load_gripper, fran
     add_laser_to_urdf(robot_description_config, parent_link=f'{robot_type_str}_link8')
     redirect_controller_params(
         robot_description_config,
-        package='maze_solver',
+        package='maze_environment',
         filename='franka_gazebo_controllers.yaml')
     robot_description = {'robot_description': robot_description_config.toxml()}
 
@@ -325,7 +325,7 @@ def generate_launch_description():
         get_package_share_directory('franka_description'))
     pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
     world_file = os.path.join(
-        get_package_share_directory('maze_solver'),
+        get_package_share_directory('maze_environment'),
         'worlds', 'empty_with_sensors.sdf')
     gazebo_world = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -370,7 +370,7 @@ def generate_launch_description():
     )
 
     overhead_camera_model = os.path.join(
-        get_package_share_directory('maze_solver'),
+        get_package_share_directory('maze_environment'),
         'models', 'overhead_camera', 'model.sdf')
 
     overhead_camera_pose = get_overhead_camera_pose()

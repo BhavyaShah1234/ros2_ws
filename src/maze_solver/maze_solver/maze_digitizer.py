@@ -15,13 +15,11 @@ from nav_msgs.msg import OccupancyGrid
 
 class MazeDigitizer(Node):
     def __init__(self):
-        with open(os.path.join(get_package_share_directory('maze_solver'), 'config', 'ros_interfaces.yaml'), 'r') as file:
-            config = yaml.safe_load(file)
-        super(MazeDigitizer, self).__init__(node_name=config['nodes']['maze_digitizer'])
+        super(MazeDigitizer, self).__init__(node_name='maze_digitizer')
         self.bridge = CvBridge()
-        self.create_subscription(Image, config['topics']['overhead_camera_image'], self.callback, 10)
+        self.create_subscription(Image, 'overhead_camera_image', self.callback, 10)
         grid_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        self.grid_publisher = self.create_publisher(OccupancyGrid, config['topics']['maze_occupancy_grid'], grid_qos)
+        self.grid_publisher = self.create_publisher(OccupancyGrid, 'maze_occupancy_grid', grid_qos)
         self.get_logger().info('maze_digitizer started')
 
     def decode_image(self, image_message):

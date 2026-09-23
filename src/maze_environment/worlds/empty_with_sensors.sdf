@@ -2,7 +2,7 @@
 <!--
   Same as the stock ros_gz_sim "empty.sdf" world, with one addition: the
   gz::sim::systems::Sensors system plugin. Without it, camera/depth/lidar
-  sensors (including the overhead RGB-D camera from maze_solver)
+  sensors (including the overhead RGB-D camera from maze_environment)
   advertise their topics but never actually render or publish frames: the
   system that drives sensor rendering simply isn't loaded in the plain
   empty.sdf world used by franka_gazebo_bringup's example launch files.

@@ -3,31 +3,26 @@
 <package format="3">
   <name>maze_solver</name>
   <version>0.1.0</version>
-  <description>Franka FR3 maze-solving simulation: overhead camera, maze, laser end-effector, and solver nodes</description>
+  <description>Maze-solving nodes: perceives the maze from the overhead camera and plans a path through it</description>
   <maintainer email="bshah43@asu.edu">Bhavya Shah</maintainer>
   <license>Apache 2.0</license>
 
-  <buildtool_depend>ament_cmake</buildtool_depend>
-  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <buildtool_depend>ament_python</buildtool_depend>
 
-  <exec_depend>franka_gazebo_bringup</exec_depend>
-  <exec_depend>ros_gz_sim</exec_depend>
-  <exec_depend>ros_gz_bridge</exec_depend>
-  <exec_depend>python3-yaml</exec_depend>
-  <exec_depend>joint_trajectory_controller</exec_depend>
-  <exec_depend>control_msgs</exec_depend>
-  <exec_depend>controller_manager_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
 
-  <test_depend>ament_lint_auto</test_depend>
-  <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
 
   <export>
-    <build_type>ament_cmake</build_type>
+    <build_type>ament_python</build_type>
   </export>
 </package>
