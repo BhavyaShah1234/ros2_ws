@@ -71,6 +71,18 @@ def get_maze_corners():
         return yaml.safe_load(f)['maze']
 
 
+def get_robot_base_pose():
+    """Read the robot base's mount pose from config/camera_and_maze.yaml.
+
+    See that file for why the base sits where it does.
+    """
+    config_path = os.path.join(
+        get_package_share_directory('maze_environment'),
+        'config', 'camera_and_maze.yaml')
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)['robot']
+
+
 def make_maze_sdf():
     """Build the maze as one static model, from config/maze_layout.yaml's
     wall list mapped onto the square formed by config/camera_and_maze.yaml's
@@ -218,6 +230,26 @@ def add_laser_to_urdf(doc, parent_link):
     return doc
 
 
+def set_robot_base_pose(doc, pose):
+    """Set where the robot's base is mounted by rewriting the <origin> of the
+    URDF's `world_joint` (the fixed joint from the "world" link that Gazebo
+    requires for a statically mounted robot).
+
+    franka_description's franka_robot xacro macro does take xyz/rpy for this
+    joint, but fr3.urdf.xacro (which this launch file processes) never passes
+    them through, so they can't be set via xacro mappings -- and that package
+    is a pinned submodule, so this edits the DOM after xacro has run instead,
+    same as add_laser_to_urdf() and redirect_controller_params().
+    """
+    for joint in doc.getElementsByTagName('joint'):
+        if joint.getAttribute('name') == 'world_joint':
+            origin = joint.getElementsByTagName('origin')[0]
+            origin.setAttribute('xyz', f"{pose['x']} {pose['y']} {pose['z']}")
+            origin.setAttribute('rpy', f"0 0 {pose['yaw']}")
+            return
+    raise RuntimeError('world_joint not found in the robot description')
+
+
 def redirect_controller_params(doc, package, filename):
     """Redirect the ros2_control plugin's <parameters> path to a different
     package/file.
@@ -269,6 +301,7 @@ def get_robot_description(context: LaunchContext, robot_type, load_gripper, fran
         }
     )
     add_laser_to_urdf(robot_description_config, parent_link=f'{robot_type_str}_link8')
+    set_robot_base_pose(robot_description_config, get_robot_base_pose())
     redirect_controller_params(
         robot_description_config,
         package='maze_environment',

@@ -1,13 +1,7 @@
-import contextlib
-import io
-import os
 import traceback
 import cv2
 import rclpy as r
-import yaml
-from ament_index_python.packages import get_package_share_directory
-with contextlib.redirect_stderr(io.StringIO()):
-    from cv_bridge import CvBridge
+from cv_bridge import CvBridge
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from sensor_msgs.msg import Image
@@ -56,7 +50,7 @@ class MazeDigitizer(Node):
                 self.grid_publisher.publish(grid_message)
                 self.get_logger().info(f'published occupancy grid: {grid_message.info.width}x{grid_message.info.height}')
         except Exception:
-            self.get_logger().error(traceback.format_exc())
+            pass
 
 def main(args=None):
     r.init(args=args)

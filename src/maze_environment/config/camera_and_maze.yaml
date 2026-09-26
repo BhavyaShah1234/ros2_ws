@@ -1,7 +1,8 @@
-# Overhead camera pose + maze corner calibration -- merged into one file
-# since both configure different aspects of the same overhead
-# camera/maze setup (see franka_with_overhead_camera.launch.py, which reads
-# both sections at launch time).
+# Scene layout: overhead camera pose, robot base pose, and maze corner
+# calibration -- kept in one file since they all constrain each other (the
+# camera must see the maze unobstructed by the arm, and the arm must reach
+# every cell). See franka_with_overhead_camera.launch.py, which reads all
+# three sections at launch time.
 
 # Pose used to spawn the overhead camera. Applied via `ros_gz_sim create`'s
 # -x/-y/-z/-R/-P/-Y flags, which unconditionally override any <pose> in
@@ -9,7 +10,7 @@
 # actually controls where the camera ends up. Edits here take effect on the
 # next `ros2 launch`, no rebuild needed.
 overhead_camera:
-  # Horizontal position, in meters, in the world frame (robot base = origin).
+  # Horizontal position, in meters, in the world frame.
   # x is centered over the maze's x-span (corners span x in [0.1, 0.7], so
   # midpoint 0.4) -- previously 0.8, well past the maze's far edge, which is
   # why the camera had to be tilted just to see the maze at all.
@@ -43,12 +44,39 @@ overhead_camera:
   pitch: 1.5707963
   yaw: 0.0
 
+# Mount pose of the FR3's base in the world frame (x/y/z in meters, yaw in
+# radians; the robot faces +x at yaw 0). Applied by editing the URDF's
+# `world_joint` origin (set_robot_base_pose() in the launch file) -- the
+# franka_description xacro doesn't expose it as an argument.
+#
+# x = -0.08 balances two opposing constraints, both worked out from the real
+# FR3 kinematics (URDF joint limits; all 7 arm joints are active revolute
+# joints commanded by joint_trajectory_controller):
+#  - Visibility: in its default pose the wrist and laser rod hang ~0.31 m in
+#    front of the base, directly under the camera. At x = 0 they shadow ~16%
+#    of the maze from the overhead camera; the shadow is 0% from x = -0.08
+#    back (still 0% with the link radii inflated 30% as a safety margin).
+#  - Reach: the laser tip has to get down between the 3 cm walls in every
+#    cell. From the base, the tip can reach floor level between ~0.10 and
+#    ~0.85 m away, comfortably (>= 10% inside every joint limit) between
+#    ~0.19 and ~0.84 m. At x = -0.08 the maze spans 0.18-0.84 m from the
+#    base, and all 100 cell centers plus the 4 corners are reachable with the
+#    tool within 10 degrees of vertical (worst joint margin 12%). Moving the
+#    base further back loses the far corners (x = -0.10 already needs ~15
+#    degrees of tool tilt there); moving it closer brings the arm back into
+#    the camera's view and makes the near row hard to reach.
+robot:
+  x: -0.08
+  y: 0.0
+  z: 0.0
+  yaw: 0.0
+
 # Corners of the square the maze (config/maze_layout.yaml) is rendered onto
 # at launch time (see make_maze_sdf() in franka_with_overhead_camera.launch.py):
 # grid x in [0, cells_per_side] -> world x in [min corner x, max corner x],
 # same for y -- so moving these points moves and rescales the maze with
 # them. Each point is a real-world (x, y, z) location, in meters, in the
-# world frame (robot base = origin; robot faces +x).
+# world frame (the robot faces +x).
 #
 # Only 3 of the square's 4 corners are defined below (bottom_right is left
 # out) -- 3 points are all make_maze_sdf() needs to derive the square's

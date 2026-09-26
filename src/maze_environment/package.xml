@@ -9,6 +9,9 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <build_depend>python3-numpy</build_depend>
+  <depend>realsense2_description</depend>
+
   <exec_depend>franka_gazebo_bringup</exec_depend>
   <exec_depend>ros_gz_sim</exec_depend>
   <exec_depend>ros_gz_bridge</exec_depend>
