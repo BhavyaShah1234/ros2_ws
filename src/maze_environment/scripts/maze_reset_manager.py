@@ -2,15 +2,17 @@
 import os
 import subprocess
 import tempfile
-import time
 import yaml
 import tf2_ros
 import rclpy as r
 from ament_index_python.packages import get_package_share_directory
 from mazelib import Maze
 from mazelib.generate.BacktrackingGenerator import BacktrackingGenerator
+from moveit_msgs.action import ExecuteTrajectory
+from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.time import Time
+from sensor_msgs.msg import JointState
 from std_msgs.msg import Empty
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -32,12 +34,17 @@ class MazeResetManager(Node):
             self.maze_cfg = yaml.safe_load(f)['maze']
         self.goal_x, self.goal_y = self.compute_goal_position()
         self.triggered = False
+        self.joint_state = None
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
-        self.trajectory_publisher = self.create_publisher(JointTrajectory, '/joint_trajectory_controller/joint_trajectory', 10)
+        self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 10)
+        self.execute_trajectory_client = ActionClient(self, ExecuteTrajectory, '/execute_trajectory')
         self.digitizer_reset_publisher = self.create_publisher(Empty, '/maze_digitizer/reset', 10)
         self.create_timer(0.1, self.check_goal)
         self.get_logger().info(f'maze_reset_manager started, goal at world ({self.goal_x:.3f}, {self.goal_y:.3f})')
+
+    def joint_state_callback(self, joint_state_message):
+        self.joint_state = joint_state_message
 
     def bounds(self):
         xs = [c['x'] for c in self.corners.values()]
@@ -67,19 +74,77 @@ class MazeResetManager(Node):
                 self.triggered = True
                 self.get_logger().info('laser reached the goal, resetting')
                 self.go_home()
-                self.reset_maze()
         except Exception:
             pass
 
     def go_home(self):
-        point = JointTrajectoryPoint()
-        point.positions = HOME_ANGLES
-        point.time_from_start.sec = int(HOME_SECONDS)
+        # Routed through MoveIt2's own execute_trajectory action (same one
+        # motion_executor.py uses) rather than publishing straight to
+        # /joint_trajectory_controller/joint_trajectory -- move_group's
+        # moveit_simple_controller_manager now owns that controller, and a
+        # raw publish here while it still believes a maze trace is executing
+        # raced it badly in testing (a stale "trajectory execution finished"
+        # arriving seconds late, right as the NEXT maze's path was already
+        # being computed).
+        #
+        # Fully async (send_goal_async + done-callbacks), same as
+        # motion_executor.py -- reset_maze() only runs once the result
+        # callback confirms the home move actually finished. An earlier
+        # version blocked here with rclpy.spin_until_future_complete, called
+        # from inside this already-spinning timer callback: that hung
+        # outright on the SECOND future (results never delivered) even
+        # though it worked, seemingly by luck, on the first -- nested
+        # spinning like that isn't reliable and shouldn't be used again.
+        if self.joint_state is None:
+            self.get_logger().warning('no /joint_states yet, skipping home move')
+            return
+        # ExecuteTrajectory's own start-state validation checks the
+        # trajectory's FIRST point against the robot's actual current state
+        # (unlike the old raw topic publish, which didn't care) -- a
+        # target-only single-point trajectory always fails that unless the
+        # arm happens to already be at HOME_ANGLES, so the current state has
+        # to be the explicit first point. allowed_start_tolerance is also
+        # widened in franka_with_overhead_camera.launch.py: Gazebo's joints
+        # haven't always fully settled to zero velocity the instant a
+        # trajectory reports finished, which the default 0.01 tolerance
+        # could fail on even with a fresh state read here.
+        current_by_name = dict(zip(self.joint_state.name, self.joint_state.position))
+        start_point = JointTrajectoryPoint()
+        start_point.positions = [current_by_name[name] for name in JOINT_NAMES]
+        start_point.time_from_start.sec = 0
+        home_point = JointTrajectoryPoint()
+        home_point.positions = HOME_ANGLES
+        home_point.time_from_start.sec = int(HOME_SECONDS)
         trajectory_message = JointTrajectory()
         trajectory_message.joint_names = JOINT_NAMES
-        trajectory_message.points = [point]
-        self.trajectory_publisher.publish(trajectory_message)
-        time.sleep(HOME_SECONDS + 0.5)
+        trajectory_message.points = [start_point, home_point]
+        if not self.execute_trajectory_client.server_is_ready():
+            self.get_logger().warning('execute_trajectory action server not available, skipping home move')
+            return
+        goal = ExecuteTrajectory.Goal()
+        goal.trajectory.joint_trajectory = trajectory_message
+        send_future = self.execute_trajectory_client.send_goal_async(goal)
+        send_future.add_done_callback(self.home_goal_response)
+
+    def home_goal_response(self, future):
+        try:
+            goal_handle = future.result()
+            if not goal_handle.accepted:
+                self.get_logger().warning('move_group rejected the home trajectory goal')
+                self.reset_maze()
+                return
+            result_future = goal_handle.get_result_async()
+            result_future.add_done_callback(self.home_result)
+        except Exception:
+            self.reset_maze()
+
+    def home_result(self, future):
+        try:
+            future.result()
+        except Exception:
+            pass
+        finally:
+            self.reset_maze()
 
     def generate_layout(self):
         n = self.maze_cfg['cells_per_side']

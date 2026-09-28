@@ -27,6 +27,16 @@
   <!-- mazelib has no rosdep key; installed via pip with the system's externally managed override flag -->
   <exec_depend>mazelib</exec_depend>
 
+  <!-- MoveIt2 for motion_executor.py's Cartesian path planning/execution -->
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>moveit_ros_move_group</exec_depend>
+  <exec_depend>moveit_ros_planning</exec_depend>
+  <exec_depend>moveit_kinematics</exec_depend>
+  <exec_depend>moveit_planners_ompl</exec_depend>
+  <exec_depend>moveit_simple_controller_manager</exec_depend>
+  <!-- provides kinematics.yaml, fr3_joint_limits.yaml, ompl_planning.yaml -->
+  <exec_depend>franka_fr3_moveit_config</exec_depend>
+
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 

@@ -1,97 +1,48 @@
-import os
-import tempfile
-import xml.dom.minidom as minidom
-import ikpy.chain
 import rclpy as r
 import tf2_ros
+from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.time import Time
-from rclpy.duration import Duration
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from sensor_msgs.msg import CameraInfo, JointState
-from std_msgs.msg import String
+from geometry_msgs.msg import Pose
 from nav_msgs.msg import Path
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from moveit_msgs.msg import RobotState
+from moveit_msgs.srv import GetCartesianPath
+from moveit_msgs.action import ExecuteTrajectory
 
-BASE_ELEMENTS = [
-    'world', 'world_joint', 'fr3_link0',
-    'fr3_joint1', 'fr3_link1',
-    'fr3_joint2', 'fr3_link2',
-    'fr3_joint3', 'fr3_link3',
-    'fr3_joint4', 'fr3_link4',
-    'fr3_joint5', 'fr3_link5',
-    'fr3_joint6', 'fr3_link6',
-    'fr3_joint7', 'fr3_link7',
-    'fr3_joint8', 'fr3_link8',
-    'laser_joint', 'laser_link',
-]
-ACTIVE_LINKS_MASK = [False, False, True, True, True, True, True, True, True, False, False]
+GROUP_NAME = 'fr3_arm'
+LINK_NAME = 'laser_link'
 TRACE_HEIGHT_M = 0.015
-MIN_STEP_SECONDS = 0.15
-FIRST_WAYPOINT_SECONDS = 3.0
-# Real FR3 joints can move much faster than this, but the trajectory
-# controller here has no joint_limits configured to catch an infeasible
-# request itself (see config/franka_gazebo_controllers.yaml), so a segment
-# demanding more than the joint's rated velocity is only caught by Gazebo's
-# physics failing to track it -- which looks like the arm flying apart.
-# Planning against a fraction of the real limit leaves headroom for a
-# spline/interpolated move's peak velocity exceeding its point-to-point
-# average.
+MAX_STEP_M = 0.005
+# fr3_joint_limits.yaml/the URDF's own <limit velocity="..."> give MoveIt2 the
+# real joint limits -- this just leaves headroom for a spline's peak velocity
+# exceeding its point-to-point average, same reasoning the old ikpy-based
+# VELOCITY_SAFETY_FACTOR used.
 VELOCITY_SAFETY_FACTOR = 0.5
 
 class MotionExecutor(Node):
     def __init__(self):
         super(MotionExecutor, self).__init__(node_name='motion_executor')
         self.camera_info = None
-        self.chain = None
-        self.joint_names = None
-        self.rest_angles = None
-        self.rest_angles_active = None
-        self.velocity_limits = None
-        self.joint_state = {}
-        self.busy_until = None
+        self.joint_state = None
+        self.executing = False
         self.executed_path_key = None
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         latched_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(CameraInfo, '/overhead_camera/camera_info', self.camera_info_callback, 10)
-        self.create_subscription(String, '/robot_description', self.robot_description_callback, latched_qos)
-        self.create_subscription(Path, '/path', self.path_callback, latched_qos)
         self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 10)
-        self.trajectory_publisher = self.create_publisher(JointTrajectory, '/joint_trajectory_controller/joint_trajectory', 10)
+        self.create_subscription(Path, '/path', self.path_callback, latched_qos)
+        self.cartesian_path_client = self.create_client(GetCartesianPath, '/compute_cartesian_path')
+        self.execute_trajectory_client = ActionClient(self, ExecuteTrajectory, '/execute_trajectory')
         self.get_logger().info('motion_executor started')
 
     def camera_info_callback(self, camera_info_message):
         self.camera_info = camera_info_message
 
     def joint_state_callback(self, joint_state_message):
-        self.joint_state = dict(zip(joint_state_message.name, joint_state_message.position))
-
-    def robot_description_callback(self, robot_description_message):
-        if self.chain is not None:
-            return
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.urdf', delete=False) as urdf_file:
-            urdf_file.write(robot_description_message.data)
-            urdf_path = urdf_file.name
-        self.chain = ikpy.chain.Chain.from_urdf_file(urdf_path, base_elements=BASE_ELEMENTS, active_links_mask=ACTIVE_LINKS_MASK, name='fr3_laser')
-        self.joint_names = [link.name for link, active in zip(self.chain.links, ACTIVE_LINKS_MASK) if active]
-        urdf_doc = minidom.parse(urdf_path)
-        os.unlink(urdf_path)
-        # the same joint name also appears, with no <limit> child, inside
-        # each <transmission> block further down the document -- keep only
-        # the first (real, type="revolute") definition of each name
-        joints_by_name = {}
-        for joint in urdf_doc.getElementsByTagName('joint'):
-            if joint.getAttribute('type') == 'revolute':
-                joints_by_name.setdefault(joint.getAttribute('name'), joint)
-        self.velocity_limits = [float(joints_by_name[name].getElementsByTagName('limit')[0].getAttribute('velocity')) for name in self.joint_names]
-        self.rest_angles = [0.0] * len(self.chain.links)
-        for i, active in enumerate(ACTIVE_LINKS_MASK):
-            if active:
-                lo, hi = self.chain.links[i].bounds
-                self.rest_angles[i] = (lo + hi) / 2.0
-        self.rest_angles_active = [angle for angle, active in zip(self.rest_angles, ACTIVE_LINKS_MASK) if active]
-        self.get_logger().info('built ikpy chain from robot_description')
+        self.joint_state = joint_state_message
 
     def pixel_to_world(self, u, v, z):
         camera_transform = self.tf_buffer.lookup_transform('world', 'overhead_camera/link/overhead_rgbd_camera', Time())
@@ -104,12 +55,6 @@ class MotionExecutor(Node):
         x = x_cam + (v - cy) * (height - z) / focal_length
         return x, y
 
-    def segment_seconds(self, angles_from, angles_to):
-        seconds = MIN_STEP_SECONDS
-        for a, b, limit in zip(angles_from, angles_to, self.velocity_limits):
-            seconds = max(seconds, abs(b - a) / (VELOCITY_SAFETY_FACTOR * limit))
-        return seconds
-
     def path_key(self, path_message):
         # start/goal are always the same two fixed maze openings, so they
         # can't tell two different mazes apart -- the full waypoint list is
@@ -118,46 +63,91 @@ class MotionExecutor(Node):
 
     def path_callback(self, path_message):
         try:
-            if self.chain is None or self.camera_info is None:
+            if self.camera_info is None or self.joint_state is None or self.executing:
                 return
-            if self.busy_until is not None and self.get_clock().now() < self.busy_until:
+            if not self.cartesian_path_client.service_is_ready():
                 return
-            # maze_digitizer/path_planner keep publishing the same solved
-            # path every frame even after the arm reaches the goal, right up
-            # until the camera actually sees a new maze -- without this,
-            # motion_executor would immediately re-solve and re-drive the
-            # maze it just finished the moment busy_until clears, racing
-            # maze_reset_manager's own "go home" command
             path_key = self.path_key(path_message)
             if path_key == self.executed_path_key:
                 return
-            angles = list(self.rest_angles)
-            current_angles = [self.joint_state.get(name, fallback) for name, fallback in zip(self.joint_names, self.rest_angles_active)]
-            points = []
-            time_from_start = 0.0
+            waypoints = []
             for pose in path_message.poses:
                 x, y = self.pixel_to_world(pose.pose.position.x, pose.pose.position.y, TRACE_HEIGHT_M)
-                angles = self.chain.inverse_kinematics([x, y, TRACE_HEIGHT_M], target_orientation=[0, 0, -1], orientation_mode='Z', initial_position=angles)
-                new_angles = [angle for angle, active in zip(angles, ACTIVE_LINKS_MASK) if active]
-                duration = self.segment_seconds(current_angles, new_angles)
-                if not points:
-                    duration = max(duration, FIRST_WAYPOINT_SECONDS)
-                time_from_start += duration
-                point = JointTrajectoryPoint()
-                point.positions = new_angles
-                point.time_from_start.sec = int(time_from_start)
-                point.time_from_start.nanosec = int(round((time_from_start - int(time_from_start)) * 1e9))
-                points.append(point)
-                current_angles = new_angles
-            trajectory_message = JointTrajectory()
-            trajectory_message.joint_names = self.joint_names
-            trajectory_message.points = points
-            self.trajectory_publisher.publish(trajectory_message)
+                waypoint = Pose()
+                waypoint.position.x = x
+                waypoint.position.y = y
+                waypoint.position.z = TRACE_HEIGHT_M
+                # laser_link's local +Z (its pointing axis) faces world -Z --
+                # a 180 degree rotation about X does that and there's no
+                # reason to prefer any particular roll about the pointing
+                # axis itself, so this one fixed orientation covers the
+                # whole path.
+                waypoint.orientation.x = 1.0
+                waypoint.orientation.w = 0.0
+                waypoints.append(waypoint)
+            request = GetCartesianPath.Request()
+            request.header.frame_id = 'world'
+            # move_group's own CurrentStateMonitor can be a step behind right
+            # after maze_reset_manager's direct (non-MoveIt2) homing publish,
+            # which then fails the next Cartesian path's start-state
+            # validation ("start point deviates from current robot state") --
+            # supplying our own live-tracked state sidesteps that race
+            # entirely instead of trusting move_group's cached one.
+            request.start_state = RobotState(joint_state=self.joint_state)
+            request.group_name = GROUP_NAME
+            request.link_name = LINK_NAME
+            request.waypoints = waypoints
+            request.max_step = MAX_STEP_M
+            request.jump_threshold = 0.0
+            # the maze walls are a standalone Gazebo model, never published
+            # into MoveIt's planning scene as a CollisionObject, so collision
+            # avoidance here couldn't see them anyway -- path_planner.py's
+            # A* is what actually keeps the path inside the corridor
+            request.avoid_collisions = False
+            request.max_velocity_scaling_factor = VELOCITY_SAFETY_FACTOR
+            request.max_acceleration_scaling_factor = VELOCITY_SAFETY_FACTOR
+            self.executing = True
             self.executed_path_key = path_key
-            self.busy_until = self.get_clock().now() + Duration(seconds=time_from_start)
-            self.get_logger().info(f'published trajectory: {len(points)} points over {time_from_start:.1f}s')
+            future = self.cartesian_path_client.call_async(request)
+            future.add_done_callback(self.cartesian_path_done)
+        except Exception:
+            self.executing = False
+
+    def cartesian_path_done(self, future):
+        try:
+            response = future.result()
+            points = len(response.solution.joint_trajectory.points)
+            if response.fraction < 0.99:
+                self.get_logger().warning(f'cartesian path only {response.fraction * 100:.0f}% achievable ({points} points), executing anyway')
+            else:
+                self.get_logger().info(f'computed cartesian path: {points} points')
+            goal = ExecuteTrajectory.Goal()
+            goal.trajectory = response.solution
+            send_future = self.execute_trajectory_client.send_goal_async(goal)
+            send_future.add_done_callback(self.execute_goal_response)
+        except Exception:
+            self.executing = False
+
+    def execute_goal_response(self, future):
+        try:
+            goal_handle = future.result()
+            if not goal_handle.accepted:
+                self.get_logger().warning('move_group rejected the trajectory execution goal')
+                self.executing = False
+                return
+            result_future = goal_handle.get_result_async()
+            result_future.add_done_callback(self.execute_result)
+        except Exception:
+            self.executing = False
+
+    def execute_result(self, future):
+        try:
+            result = future.result().result
+            self.get_logger().info(f'trajectory execution finished: error_code={result.error_code.val}')
         except Exception:
             pass
+        finally:
+            self.executing = False
 
 def main(args=None):
     r.init(args=args)

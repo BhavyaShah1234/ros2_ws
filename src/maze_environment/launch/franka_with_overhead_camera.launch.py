@@ -278,6 +278,100 @@ def redirect_controller_params(doc, package, filename):
             elem.firstChild.data = new_path
 
 
+def load_yaml(package, filename):
+    path = os.path.join(get_package_share_directory(package), 'config', filename)
+    with open(path, 'r') as f:
+        return yaml.safe_load(f)
+
+
+def get_move_group_node(robot_description):
+    """Bring up MoveIt2's move_group for the fr3_arm group (world -> laser_link,
+    see config/fr3_laser.srdf), so motion_executor.py can plan/execute Cartesian
+    paths through it instead of solving IK itself with ikpy.
+
+    kinematics.yaml, fr3_joint_limits.yaml and ompl_planning.yaml are Franka's
+    own authoritative files from the franka_ros2 submodule's
+    franka_fr3_moveit_config package (real acceleration limits included, which
+    aren't declared anywhere in the URDF) -- only the SRDF and controller
+    config are custom here, since this robot's end effector is a laser, not
+    Franka's own hand/gripper.
+    """
+    share_dir = get_package_share_directory('maze_environment')
+    with open(os.path.join(share_dir, 'config', 'fr3_laser.srdf'), 'r') as f:
+        robot_description_semantic = {'robot_description_semantic': f.read()}
+
+    kinematics_config = {
+        'robot_description_kinematics': load_yaml('franka_fr3_moveit_config', 'kinematics.yaml'),
+    }
+    joint_limits_config = {
+        'robot_description_planning': load_yaml('franka_fr3_moveit_config', 'fr3_joint_limits.yaml'),
+    }
+    ompl_planning_pipeline_config = {
+        'move_group': {
+            'planning_plugins': ['ompl_interface/OMPLPlanner'],
+            'request_adapters': [
+                'default_planning_request_adapters/ResolveConstraintFrames',
+                'default_planning_request_adapters/ValidateWorkspaceBounds',
+                'default_planning_request_adapters/CheckStartStateBounds',
+                'default_planning_request_adapters/CheckStartStateCollision',
+            ],
+            'response_adapters': [
+                'default_planning_response_adapters/AddTimeOptimalParameterization',
+                'default_planning_response_adapters/ValidateSolution',
+                'default_planning_response_adapters/DisplayMotionPath',
+            ],
+            'start_state_max_bounds_error': 0.1,
+        },
+    }
+    ompl_planning_pipeline_config['move_group'].update(load_yaml('franka_fr3_moveit_config', 'ompl_planning.yaml'))
+
+    moveit_controllers = {
+        'moveit_simple_controller_manager': load_yaml('maze_environment', 'moveit_controllers.yaml'),
+        'moveit_controller_manager': 'moveit_simple_controller_manager/MoveItSimpleControllerManager',
+    }
+    trajectory_execution = {
+        'moveit_manage_controllers': True,
+        # Franka's own template uses 1.2/0.5 here, but that's tuned for
+        # short reaching motions -- a maze trace runs 20-40s and genuinely
+        # took longer in Gazebo than AddTimeOptimalParameterization's own
+        # estimate (confirmed live: move_group cancelled a real, still-moving
+        # 154-waypoint trajectory as "taking too long" at its 24.47s bound).
+        # Wide margins here since a hung controller is not a realistic
+        # failure mode in this simulation.
+        'trajectory_execution.allowed_execution_duration_scaling': 3.0,
+        'trajectory_execution.allowed_goal_duration_margin': 10.0,
+        # 0.01 (Franka's own default) is tight enough that Gazebo's joints
+        # still settling to zero velocity right as a trajectory reports
+        # finished can exceed it, failing the very next trajectory's
+        # start-state validation (confirmed live: maze_reset_manager's home
+        # move immediately after a maze trace, "start point deviates from
+        # current robot state more than 0.01").
+        'trajectory_execution.allowed_start_tolerance': 0.05,
+    }
+    planning_scene_monitor_parameters = {
+        'publish_planning_scene': True,
+        'publish_geometry_updates': True,
+        'publish_state_updates': True,
+        'publish_transforms_updates': True,
+    }
+
+    return Node(
+        package='moveit_ros_move_group',
+        executable='move_group',
+        output='screen',
+        parameters=[
+            robot_description,
+            robot_description_semantic,
+            kinematics_config,
+            joint_limits_config,
+            ompl_planning_pipeline_config,
+            trajectory_execution,
+            moveit_controllers,
+            planning_scene_monitor_parameters,
+        ],
+    )
+
+
 def get_robot_description(context: LaunchContext, robot_type, load_gripper, franka_hand):
     robot_type_str = context.perform_substitution(robot_type)
     load_gripper_str = context.perform_substitution(load_gripper)
@@ -318,7 +412,7 @@ def get_robot_description(context: LaunchContext, robot_type, load_gripper, fran
         ]
     )
 
-    return [robot_state_publisher]
+    return [robot_state_publisher, get_move_group_node(robot_description)]
 
 
 def generate_launch_description():
