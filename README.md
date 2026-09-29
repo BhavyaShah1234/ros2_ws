@@ -1,17 +1,17 @@
 # ros2_ws
 
-A ROS 2 Jazzy + Gazebo Harmonic workspace for robotics simulation projects built around the Franka FR3 arm.
+A ROS 2 Jazzy + Gazebo Harmonic workspace serving two roles: a shared underlay of robotic-arm and
+autonomous-vehicle packages (Franka's own submodules below), and its own simulation projects built
+around them.
+
+The maze-solving project that used to live here (`maze_environment`, `maze_solver`) has moved to
+its own workspace, [`maze_ws`](https://github.com/BhavyaShah1234/MazeSolverRobot), rebuilt with a
+real sim/hardware boundary and overlaid on top of this workspace's `franka_description`/
+`franka_ros2`/`libfranka` rather than vendoring its own copies -- see that repo for the current
+version. This is also the intended pattern going forward: new arm/AV projects get their own
+workspace and overlay this one for the shared hardware stack, instead of duplicating it.
 
 ## Projects
-
-### Maze-solving arm (`maze_environment`, `maze_solver`)
-
-A Franka FR3 with a laser rangefinder mounted at its flange solves a physical maze it can only see from a fixed overhead camera. `maze_environment` brings up the Gazebo world, the robot, the overhead camera, and the maze itself, and regenerates a new maze once the laser reaches the exit. `maze_solver` perceives the maze from the camera image (`maze_digitizer`), plans a path through it with A* (`path_planner`), and drives the arm's end-effector laser along that path via inverse kinematics (`motion_executor`). Digitization only trusts a frame once the camera has a clear, unobstructed view, so the plan stays fixed for the whole run instead of re-planning as the arm's own motion occludes the camera.
-
-```bash
-ros2 launch maze_environment franka_with_overhead_camera.launch.py
-ros2 launch maze_solver maze_solver.launch.py
-```
 
 ### Table tennis dual-robot simulation (`table_tennis_description`, `table_tennis_gazebo`)
 
@@ -28,15 +28,6 @@ ros2 launch table_tennis_gazebo simulation.launch.py
 - [`libfranka`](https://github.com/frankaemika/libfranka) (`main` branch) -- the underlying C++ control library
 
 These are pinned as git submodules rather than committed directly, so upstream changes never need to be merged by hand -- see **Cloning** below.
-
-### `gz_ros2_control`
-
-Vendored from [ros-controls/gz_ros2_control](https://github.com/ros-controls/gz_ros2_control) (`jazzy` branch), built from source rather than the `ros-jazzy-gz-ros2-control` apt package, which has an ABI mismatch with this workspace's `hardware_interface` build (`undefined symbol` errors at controller-activation time). It's currently committed directly rather than registered as a proper submodule in `.gitmodules` -- if you re-clone and `src/gz_ros2_control` comes up empty, clone it manually:
-
-```bash
-cd src/
-git clone https://github.com/ros-controls/gz_ros2_control.git -b jazzy
-```
 
 ## Cloning
 
@@ -97,8 +88,6 @@ sudo apt install -y \
   python3-vcstool \
   python3-rosdep
 ```
-
-`gz_ros2_control` is intentionally not in this list -- build it from source as described above; the apt package is ABI-incompatible with this workspace.
 
 ### 4. Clone and build
 
